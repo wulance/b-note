@@ -249,9 +249,29 @@ assert.deepEqual(extractKeyFrameTargets('### [08:44] 硬件架构深度对比\n[
   { title: '硬件架构深度对比 [08:50]', seconds: 530, label: '[08:50]' },
 ]);
 
+assert.deepEqual(extractKeyFrameTargets('### 1. DeepSeek V4 发布背景与期待 (00:06 - 00:31)\n正文'), [
+  { title: '1. DeepSeek V4 发布背景与期待 (00:06 - 00:31)', seconds: 6, label: '(00:06 - 00:31)' },
+]);
+
 assert.equal(
   ensureKeyFrameMarkers('## 分段笔记\n### 1. 开场 `[00:21 - 00:30]`\n内容\n### 2. 对比 [06:47 - 07:16]\n内容'),
   '## 分段笔记\n### 1. 开场 `[00:21 - 00:30]`\n[<image>@00:21]\n内容\n### 2. 对比 [06:47 - 07:16]\n[<image>@06:47]\n内容'
+);
+
+assert.equal(
+  ensureKeyFrameMarkers('### 1. DeepSeek V4 发布背景与期待 (00:06 - 00:31)\n正文'),
+  '### 1. DeepSeek V4 发布背景与期待 (00:06 - 00:31)\n[<image>@00:06]\n正文'
+);
+
+assert.equal(
+  ensureKeyFrameMarkers([
+    '### 1. 第一段 [00:01]',
+    '正文',
+    '### 2. 第二段 [00:02]',
+    '正文',
+    '### 3. 第三段 [00:03]',
+  ].join('\n')),
+  '### 1. 第一段 [00:01]\n[<image>@00:01]\n正文\n### 2. 第二段 [00:02]\n[<image>@00:02]\n正文\n### 3. 第三段 [00:03]\n[<image>@00:03]'
 );
 
 assert.deepEqual(extractKeyFrameTargets('### 1. 开场\n[<image> @ 00:21]\n内容'), [

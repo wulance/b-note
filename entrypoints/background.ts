@@ -143,7 +143,10 @@ async function handleGenerateTags(msg: Extract<RuntimeMessage, { type: 'GENERATE
 
 async function handleFetchModels(msg: Extract<RuntimeMessage, { type: 'FETCH_MODELS' }>, sendResponse: (r: any) => void) {
   try {
-    const result = await fetchAvailableModels(msg.config as AIConfig);
+    const result = await fetchAvailableModels(msg.config as AIConfig, {
+      providerId: msg.providerId,
+      fallbackModels: msg.fallbackModels,
+    });
     sendResponse({ ok: true, models: result.models });
   } catch (e: any) {
     console.error('[b-note] fetch models failed', e);

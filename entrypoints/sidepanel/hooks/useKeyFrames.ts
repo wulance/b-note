@@ -54,7 +54,7 @@ export function useKeyFrames({
     try {
       const frame = await requestKeyFrame();
       if (!frame) return;
-      const nextFrames = [frame, ...keyFrames].slice(0, 6);
+      const nextFrames = [frame, ...keyFrames];
       setKeyFrames(nextFrames);
       await onPersist(nextFrames);
       setNotice(`已抓取关键画面：${frame.title}`);
@@ -102,11 +102,11 @@ export function useKeyFrames({
       setNotice('请先生成笔记，再自动抓取关键画面');
       return;
     }
-    const contentWithMarkers = ensureKeyFrameMarkers(result, 6);
+    const contentWithMarkers = ensureKeyFrameMarkers(result);
     if (contentWithMarkers !== result) {
       onResultChange(contentWithMarkers);
     }
-    const targets = extractKeyFrameTargets(contentWithMarkers, 6);
+    const targets = extractKeyFrameTargets(contentWithMarkers);
     if (!targets.length) {
       setNotice('当前笔记里没有可用时间戳，无法自动抓帧');
       return;
@@ -129,7 +129,7 @@ export function useKeyFrames({
       if (captured.length) {
         const existing = new Set(keyFrames.map((frame) => Math.round(frame.seconds)));
         const fresh = captured.filter((frame) => !existing.has(Math.round(frame.seconds)));
-        const nextFrames = [...fresh, ...keyFrames].slice(0, 6);
+        const nextFrames = [...fresh, ...keyFrames];
         setKeyFrames(nextFrames);
         await onPersist(nextFrames, contentWithMarkers);
         setNotice(`已自动抓取 ${captured.length} 张关键画面`);

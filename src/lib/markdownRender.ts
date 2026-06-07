@@ -1,4 +1,4 @@
-import { createHeadingId, parseTimestampLabel } from './markdown';
+import { createHeadingId, parseTimestampLabel, TIMESTAMP_PATTERN } from './markdown';
 
 export type RenderBlock =
   | { type: 'heading'; level: 1 | 2 | 3; text: string }
@@ -118,6 +118,7 @@ export function parseRenderBlocks(markdown: string): RenderBlock[] {
       const next = lines[index].trim();
       if (
         /^(#{1,3})\s+/.test(next) ||
+        /^\[<image>\s*@\s*\d{1,2}:\d{2}(?::\d{2})?\]$/i.test(next) ||
         /^```/.test(next) ||
         /^[-*]\s+/.test(next) ||
         /^\d+\.\s+/.test(next) ||
@@ -154,6 +155,10 @@ export function getBlockPlainText(block: RenderBlock): string {
     default:
       return '';
   }
+}
+
+export function extractTimestampLabels(text: string): string[] {
+  return String(text || '').match(TIMESTAMP_PATTERN) || [];
 }
 
 export function getSafeHref(href: string): string | null {

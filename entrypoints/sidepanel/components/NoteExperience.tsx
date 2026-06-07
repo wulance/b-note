@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatUsage, normalizeMarkdownContent } from '@/src/lib/note';
 import { createHeadingId, parseTimestampLabel, type MarkdownOutlineItem } from '@/src/lib/markdown';
-import { getBlockPlainText, getSafeHref, parseRenderBlocks, type RenderBlock } from '@/src/lib/markdownRender';
+import { extractTimestampLabels, getBlockPlainText, getSafeHref, parseRenderBlocks, type RenderBlock } from '@/src/lib/markdownRender';
 import { formatTime } from '@/src/lib/subtitle';
 import type { TokenUsage } from '@/src/lib/summarizer';
 import type { KeyFrame } from '@/src/lib/keyFrames';
@@ -145,7 +145,7 @@ export function MarkdownRenderer({ content, frames = [] }: { content: unknown; f
 
   const renderInline = (rawText: unknown): ReactNode => {
     const text = String(rawText ?? '');
-    const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|!?\[[^\]]+\]\([^)]+\)|\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\])/g);
+    const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|!?\[[^\]]+\]\([^)]+\)|[\[(（]\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?[\])）])/g);
     return parts.map((part, i) => {
       if (!part) return null;
       if (part.startsWith('**') && part.endsWith('**')) {
@@ -177,7 +177,7 @@ export function MarkdownRenderer({ content, frames = [] }: { content: unknown; f
           </a>
         ) : label;
       }
-      if (/^\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]$/.test(part)) {
+      if (/^[\[(（]\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?[\])）]$/.test(part)) {
         return (
           <button
             key={i}
@@ -344,7 +344,7 @@ function findFrameForBlock(
   renderedFrameSeconds: Set<number>,
 ): KeyFrame | null {
   const text = getBlockPlainText(block);
-  const timestamps = text.match(/\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]/g) || [];
+  const timestamps = extractTimestampLabels(text);
   for (const timestamp of timestamps) {
     const seconds = parseTimestampLabel(timestamp);
     if (seconds == null) continue;
@@ -382,7 +382,7 @@ function createFrameAnchorMap(frames: KeyFrame[]): Map<number, KeyFrame> {
 }
 
 function firstTimestampSeconds(text: string): number | null {
-  const timestamp = text.match(/\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]/)?.[0];
+  const timestamp = extractTimestampLabels(text)[0];
   return timestamp ? parseTimestampLabel(timestamp) : null;
 }
 

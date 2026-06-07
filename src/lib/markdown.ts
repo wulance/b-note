@@ -12,6 +12,8 @@ export interface KeyFrameTarget {
   label: string;
 }
 
+export const TIMESTAMP_PATTERN = /[\[(（]\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?[\])）]/g;
+
 export function extractMarkdownOutline(content: unknown): MarkdownOutlineItem[] {
   return normalizeMarkdownContent(content)
     .split('\n')
@@ -24,7 +26,7 @@ export function extractMarkdownOutline(content: unknown): MarkdownOutlineItem[] 
     .filter(Boolean) as MarkdownOutlineItem[];
 }
 
-export function extractKeyFrameTargets(content: unknown, limit = 6): KeyFrameTarget[] {
+export function extractKeyFrameTargets(content: unknown, limit?: number): KeyFrameTarget[] {
   const lines = normalizeMarkdownContent(content).split('\n');
   const imageTargets = extractImageFrameTargets(lines, limit);
   if (imageTargets.length) return imageTargets;
@@ -39,11 +41,11 @@ export function extractKeyFrameTargets(content: unknown, limit = 6): KeyFrameTar
     if (heading) {
       currentHeading = heading[2]
         .replace(/\*\*/g, '')
-        .replace(/\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]/g, '')
+        .replace(TIMESTAMP_PATTERN, '')
         .trim() || currentHeading;
     }
 
-    const timestamp = line.match(/\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]/);
+    const timestamp = line.match(TIMESTAMP_PATTERN);
     if (!timestamp) continue;
 
     const seconds = parseTimestampLabel(timestamp[0]);
@@ -54,15 +56,16 @@ export function extractKeyFrameTargets(content: unknown, limit = 6): KeyFrameTar
       seconds,
       label: timestamp[0],
     });
-    if (targets.length >= limit) break;
+    if (hasReachedLimit(targets.length, limit)) break;
   }
 
   return targets;
 }
 
-export function ensureKeyFrameMarkers(content: unknown, limit = 6): string {
+export function ensureKeyFrameMarkers(content: unknown, limit?: number): string {
   const markdown = normalizeMarkdownContent(content);
-  if (!markdown.trim() || /\[<image>\s*@/i.test(markdown)) return markdown;
+  if (!markdown.trim()) return markdown;
+  if (/\[<image>\s*@/i.test(markdown)) return markdown;
 
   const lines = markdown.split('\n');
   const output: string[] = [];
@@ -78,12 +81,12 @@ export function ensureKeyFrameMarkers(content: unknown, limit = 6): string {
       inCodeBlock = !inCodeBlock;
       continue;
     }
-    if (inCodeBlock || inserted >= limit) continue;
+    if (inCodeBlock || hasReachedLimit(inserted, limit)) continue;
 
     const heading = /^(#{1,3})\s+/.test(line);
     if (!heading) continue;
 
-    const timestamp = line.match(/\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]/);
+    const timestamp = line.match(TIMESTAMP_PATTERN);
     if (!timestamp) continue;
 
     const seconds = parseTimestampLabel(timestamp[0]);
@@ -96,7 +99,7 @@ export function ensureKeyFrameMarkers(content: unknown, limit = 6): string {
   return output.join('\n');
 }
 
-function extractImageFrameTargets(lines: string[], limit: number): KeyFrameTarget[] {
+function extractImageFrameTargets(lines: string[], limit?: number): KeyFrameTarget[] {
   const targets: KeyFrameTarget[] = [];
   const seenSeconds = new Set<number>();
   let currentHeading = '关键片段';
@@ -107,7 +110,7 @@ function extractImageFrameTargets(lines: string[], limit: number): KeyFrameTarge
     if (heading) {
       currentHeading = heading[2]
         .replace(/\*\*/g, '')
-        .replace(/\[\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?\]/g, '')
+        .replace(TIMESTAMP_PATTERN, '')
         .trim() || currentHeading;
       continue;
     }
@@ -123,10 +126,14 @@ function extractImageFrameTargets(lines: string[], limit: number): KeyFrameTarge
       seconds,
       label,
     });
-    if (targets.length >= limit) break;
+    if (hasReachedLimit(targets.length, limit)) break;
   }
 
   return targets;
+}
+
+function hasReachedLimit(count: number, limit?: number): boolean {
+  return Number.isFinite(limit) && count >= Number(limit);
 }
 
 function formatMarkerTime(seconds: number): string {
@@ -150,7 +157,7 @@ export function createHeadingId(title: string): string {
 }
 
 export function parseTimestampLabel(label: string): number | null {
-  const firstTimestamp = label.replace(/^\[|\]$/g, '').split(/\s*-\s*/)[0] || '';
+  const firstTimestamp = label.replace(/^[\[(（]|[\])）]$/g, '').split(/\s*-\s*/)[0] || '';
   const parts = firstTimestamp.split(':').map((part) => Number(part));
   if (parts.length < 2 || parts.length > 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
     return null;

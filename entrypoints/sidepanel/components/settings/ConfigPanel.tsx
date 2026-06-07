@@ -34,6 +34,7 @@ export function ConfigPanel({
   lastApiTestUsage,
   onFetchModels,
   modelFetchStatus,
+  modelFetchMessage,
 }: {
   config: AIConfig;
   onChange: (c: AIConfig) => void;
@@ -56,6 +57,7 @@ export function ConfigPanel({
   lastApiTestUsage: TokenUsage | null;
   onFetchModels: () => void;
   modelFetchStatus: 'idle' | 'loading';
+  modelFetchMessage: string | null;
 }) {
   const [section, setSection] = useState<ConfigSection>('ai');
   const transcriptionWarning = getTranscriptionWarning(config);
@@ -182,6 +184,9 @@ export function ConfigPanel({
                     className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     placeholder="输入模型名"
                   />
+                )}
+                {modelFetchMessage && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{modelFetchMessage}</p>
                 )}
               </div>
 

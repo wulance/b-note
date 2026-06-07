@@ -204,34 +204,27 @@ export async function summarize(
     },
   ];
 
-  const response = await fetch(chatCompletionsUrl(config.baseUrl), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: 0.3,
-      max_tokens: mode === 'detailed' ? 6000 : mode === 'standard' ? 2600 : 700,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API 请求失败 (${response.status}): ${errorText}`);
-  }
-
-  const data = await response.json();
-  return {
-    content: normalizeMessageContent(data.choices?.[0]?.message?.content),
-    usage: normalizeUsage(data.usage),
-    chunks: 1,
-  };
+  const result = await sendChatCompletion(config, messages, 0.3, mode === 'detailed' ? 6000 : mode === 'standard' ? 2600 : 700);
+  return { ...result, chunks: 1 };
 }
 
-export async function fetchAvailableModels(config: AIConfig): Promise<ModelListResult> {
+export async function fetchAvailableModels(
+  config: AIConfig,
+  options: { providerId?: string; fallbackModels?: string[] } = {}
+): Promise<ModelListResult> {
+  if (options.providerId === 'cloudflare-workers-ai') {
+    return fetchCloudflareWorkersAiModels(config, options.fallbackModels);
+  }
+  if (options.providerId === 'gemini') {
+    return fetchGeminiModels(config, options.fallbackModels);
+  }
+  if (options.providerId === 'ollama') {
+    return fetchOllamaModels(config, options.fallbackModels);
+  }
+  if (options.providerId === 'anthropic') {
+    return fetchAnthropicModels(config);
+  }
+
   const response = await fetch(modelsUrl(config.baseUrl), {
     method: 'GET',
     headers: {
@@ -252,11 +245,121 @@ export async function fetchAvailableModels(config: AIConfig): Promise<ModelListR
   return { models };
 }
 
+async function fetchGeminiModels(config: AIConfig, fallbackModels?: string[]): Promise<ModelListResult> {
+  const apiKey = config.apiKey.trim();
+  if (!apiKey) {
+    const models = normalizeModelIds(fallbackModels || []);
+    if (models.length) return { models };
+    throw new Error('请先填写 Gemini API Key');
+  }
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini 模型列表获取失败 (${response.status}): ${errorText}`);
+  }
+  const payload = await response.json();
+  const models = normalizeModelIds(
+    ((payload as any)?.models || [])
+      .filter((item: any) => {
+        const methods = Array.isArray(item?.supportedGenerationMethods) ? item.supportedGenerationMethods : [];
+        return methods.includes('generateContent') || methods.includes('generateMessage');
+      })
+      .map((item: any) => String(item?.name || '').replace(/^models\//, ''))
+  );
+  if (!models.length) {
+    throw new Error('Gemini 返回了模型列表，但没有可用于文本生成的模型');
+  }
+  return { models };
+}
+
+async function fetchOllamaModels(config: AIConfig, fallbackModels?: string[]): Promise<ModelListResult> {
+  const response = await fetch(ollamaTagsUrl(config.baseUrl), { method: 'GET' });
+  if (!response.ok) {
+    const errorText = await response.text();
+    const fallback = normalizeModelIds(fallbackModels || []);
+    if (fallback.length) return { models: fallback };
+    throw new Error(`Ollama 模型列表获取失败 (${response.status}): ${errorText}`);
+  }
+
+  const payload = await response.json();
+  const models = normalizeModelIds(
+    ((payload as any)?.models || [])
+      .map((item: any) => item?.model || item?.name)
+  );
+  if (!models.length) {
+    throw new Error('Ollama 返回了模型列表，但没有可识别的模型名');
+  }
+  return { models };
+}
+
+async function fetchAnthropicModels(config: AIConfig): Promise<ModelListResult> {
+  const response = await fetch(modelsUrl(ensureAnthropicVersionBaseUrl(config.baseUrl)), {
+    method: 'GET',
+    headers: {
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic 模型列表获取失败 (${response.status}): ${errorText}`);
+  }
+
+  const payload = await response.json();
+  const models = parseModelIds(payload);
+  if (!models.length) {
+    throw new Error('Anthropic 返回了模型列表，但没有可识别的模型 ID');
+  }
+  return { models };
+}
+
+async function fetchCloudflareWorkersAiModels(config: AIConfig, fallbackModels?: string[]): Promise<ModelListResult> {
+  const url = cloudflareModelsSearchUrl(config.baseUrl);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const fallback = normalizeModelIds(fallbackModels || []);
+    if (fallback.length) return { models: fallback };
+    throw new Error(`Cloudflare 模型列表获取失败 (${response.status}): ${errorText}`);
+  }
+
+  const payload = await response.json();
+  const models = normalizeModelIds(
+    collectModelIds((payload as any)?.result)
+      .filter((id) => id.startsWith('@cf/') || !id.includes(' '))
+  );
+  if (!models.length) {
+    const fallback = normalizeModelIds(fallbackModels || []);
+    if (fallback.length) return { models: fallback };
+    throw new Error('Cloudflare 返回了模型列表，但没有可识别的模型 ID');
+  }
+  return { models };
+}
+
 function parseModelIds(payload: unknown): string[] {
   const data = (payload as any)?.data;
   const source = Array.isArray(data) ? data : Array.isArray(payload) ? payload : [];
-  return [...new Set(source
-    .map((item: any) => typeof item === 'string' ? item : item?.id || item?.name)
+  return normalizeModelIds(collectModelIds(source));
+}
+
+function collectModelIds(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(collectModelIds);
+  if (!value || typeof value !== 'object') return typeof value === 'string' ? [value] : [];
+  const item = value as Record<string, unknown>;
+  const direct = item.id || item.model || item.name;
+  if (typeof direct === 'string' && direct.trim()) return [direct];
+  return [];
+}
+
+function normalizeModelIds(models: unknown[]): string[] {
+  return [...new Set(models
     .map((id: unknown) => String(id || '').trim())
     .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
@@ -281,6 +384,12 @@ export async function summarizeStream(
       content: `${PROMPTS[mode]}\n\n${TEMPLATE_PROMPTS[template]}\n\n视频标题：${videoTitle}\n\n${subtitleText}`,
     },
   ];
+
+  if (isAnthropicConfig(config)) {
+    const result = await sendChatCompletion(config, messages, 0.3, mode === 'detailed' ? 6000 : mode === 'standard' ? 2600 : 700);
+    onDelta({ content: result.content, delta: result.content, usage: result.usage });
+    return { ...result, chunks: 1 };
+  }
 
   const controller = new AbortController();
   let content = '';
@@ -522,30 +631,11 @@ ${compactNotes}`,
 }
 
 export async function testAIConnection(config: AIConfig): Promise<TokenUsage | null> {
-  const response = await fetch(chatCompletionsUrl(config.baseUrl), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        { role: 'system', content: '只回答 OK。' },
-        { role: 'user', content: '连接测试。' },
-      ],
-      temperature: 0,
-      max_tokens: 8,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API 测试失败 (${response.status}): ${errorText}`);
-  }
-
-  const data = await response.json();
-  return normalizeUsage(data.usage);
+  const result = await sendChatCompletion(config, [
+    { role: 'system', content: '只回答 OK。' },
+    { role: 'user', content: '连接测试。' },
+  ], 0, 8);
+  return result.usage;
 }
 
 export function estimateTokenCount(text: string): number {
@@ -802,6 +892,10 @@ async function sendChatCompletion(
   temperature: number,
   maxTokens: number
 ): Promise<SummaryResult> {
+  if (isAnthropicConfig(config)) {
+    return sendAnthropicMessage(config, messages, temperature, maxTokens);
+  }
+
   const response = await fetch(chatCompletionsUrl(config.baseUrl), {
     method: 'POST',
     headers: {
@@ -824,6 +918,52 @@ async function sendChatCompletion(
   const data = await response.json();
   return {
     content: normalizeMessageContent(data.choices?.[0]?.message?.content),
+    usage: normalizeUsage(data.usage),
+  };
+}
+
+async function sendAnthropicMessage(
+  config: AIConfig,
+  messages: ChatMessage[],
+  temperature: number,
+  maxTokens: number
+): Promise<SummaryResult> {
+  const system = messages
+    .filter((message) => message.role === 'system')
+    .map((message) => message.content)
+    .join('\n\n');
+  const conversation = messages
+    .filter((message) => message.role !== 'system')
+    .map((message) => ({ role: message.role, content: message.content }));
+
+  const response = await fetch(anthropicMessagesUrl(config.baseUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: conversation,
+      ...(system ? { system } : {}),
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API 请求失败 (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  return {
+    content: normalizeMessageContent(
+      Array.isArray(data.content)
+        ? data.content.map((part: any) => part?.text || '').join('')
+        : data.content
+    ),
     usage: normalizeUsage(data.usage),
   };
 }
@@ -854,8 +994,38 @@ function chatCompletionsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/g, '')}/chat/completions`;
 }
 
+function anthropicMessagesUrl(baseUrl: string): string {
+  return `${ensureAnthropicVersionBaseUrl(baseUrl)}/messages`;
+}
+
 function modelsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/g, '')}/models`;
+}
+
+function ollamaTagsUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/g, '');
+  return `${trimmed.replace(/\/v1$/i, '')}/api/tags`;
+}
+
+function ensureAnthropicVersionBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/g, '');
+  return /\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/v1`;
+}
+
+function cloudflareModelsSearchUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/g, '');
+  const match = trimmed.match(/^(https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/[^/]+)\/ai(?:\/v1)?$/i);
+  if (!match) {
+    throw new Error('Cloudflare Base URL 应形如 https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1');
+  }
+  if (/YOUR_ACCOUNT_ID/i.test(match[1])) {
+    throw new Error('请先把 Cloudflare Base URL 中的 YOUR_ACCOUNT_ID 替换成真实 Account ID');
+  }
+  return `${match[1]}/ai/models/search`;
+}
+
+function isAnthropicConfig(config: AIConfig): boolean {
+  return /^https:\/\/api\.anthropic\.com(?:\/|$)/i.test(config.baseUrl.trim());
 }
 
 function normalizeUsage(usage: any): TokenUsage | null {

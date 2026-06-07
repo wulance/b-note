@@ -67,6 +67,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<AppView>('summary');
   const [apiTestStatus, setApiTestStatus] = useState<'idle' | 'testing'>('idle');
   const [modelFetchStatus, setModelFetchStatus] = useState<'idle' | 'loading'>('idle');
+  const [modelFetchMessage, setModelFetchMessage] = useState<string | null>(null);
   const [lastApiTestUsage, setLastApiTestUsage] = useState<TokenUsage | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatStatus, setChatStatus] = useState<'idle' | 'asking'>('idle');
@@ -203,6 +204,7 @@ export default function App() {
       },
     }));
     setLastApiTestUsage(null);
+    setModelFetchMessage(null);
   };
 
   const testApiConfig = async () => {
@@ -246,30 +248,37 @@ export default function App() {
     const requestProvider = PROVIDERS.find((p) => p.id === normalizedSettings.providerId) || provider;
     if (!requestConfig.baseUrl.trim()) {
       setNotice('请先填写 Base URL 后再获取模型');
+      setModelFetchMessage('请先填写 Base URL');
       return;
     }
     if (!requestConfig.apiKey.trim() && requestProvider.id !== 'ollama') {
       setNotice('请先配置 API Key 后再获取模型');
+      setModelFetchMessage('请先填写当前提供商的 API Key');
       addLog('模型获取未开始：缺少 API Key');
       return;
     }
 
     setModelFetchStatus('loading');
+    setModelFetchMessage('正在获取模型列表...');
     setNotice(null);
     addLog(`开始获取模型列表：${requestProvider.name}`);
     try {
       const response = await sendRuntimeMessage<ModelListResponse | RuntimeErrorResponse>({
         type: 'FETCH_MODELS',
         config: requestConfig,
+        providerId: requestProvider.id,
+        fallbackModels: requestProvider.models,
       });
       if ('error' in response) {
         setNotice(`模型获取失败：${response.error}`);
+        setModelFetchMessage(`获取失败：${response.error}`);
         addLog(`模型获取失败：${response.error}`);
         return;
       }
       const models = response.models || [];
       if (!models.length) {
         setNotice('模型获取失败：没有可用模型');
+        setModelFetchMessage('获取失败：没有可用模型');
         return;
       }
       setSettings((current) => {
@@ -289,9 +298,11 @@ export default function App() {
         };
       });
       setNotice(`已获取 ${models.length} 个模型`);
+      setModelFetchMessage(`已获取 ${models.length} 个模型`);
       addLog(`模型列表已更新：${models.length} 个`);
     } catch (error: any) {
       setNotice(`模型获取失败：${error?.message || '未知错误'}`);
+      setModelFetchMessage(`获取失败：${error?.message || '未知错误'}`);
       addLog(`模型获取失败：${error?.message || '未知错误'}`);
     } finally {
       setModelFetchStatus('idle');
@@ -483,7 +494,7 @@ export default function App() {
       const autoCaptureFrames = settings.autoCaptureKeyFrames;
       const queueFrameCapture = (content: string) => {
         if (!autoCaptureFrames) return;
-        const targets = extractKeyFrameTargets(content, 6);
+        const targets = extractKeyFrameTargets(content);
         for (const target of targets) {
           const key = Math.round(target.seconds);
           if (queuedSeconds.has(key)) continue;
@@ -493,7 +504,7 @@ export default function App() {
             setFrameStatus('capturing');
             try {
               const currentIndex = captured.length + 1;
-              const totalCount = Math.min(queuedSeconds.size, 6);
+              const totalCount = queuedSeconds.size;
               setNotice(`正在同步关键画面 ${currentIndex}/${totalCount}：${target.label}`);
               const frame = await requestKeyFrame(target.seconds, target.title, target.seconds);
               if (!frame) return;
@@ -528,7 +539,7 @@ export default function App() {
         addLog('已忽略过期总结结果');
         return;
       }
-      const finalContent = ensureKeyFrameMarkers(response.content, 6);
+      const finalContent = ensureKeyFrameMarkers(response.content);
       queueFrameCapture(finalContent);
       if (!finalContent.trim()) {
         throw new Error('流式总结没有返回内容，请稍后重试');
@@ -973,6 +984,7 @@ export default function App() {
           lastApiTestUsage={lastApiTestUsage}
           onFetchModels={fetchProviderModels}
           modelFetchStatus={modelFetchStatus}
+          modelFetchMessage={modelFetchMessage}
         />
       ) : (
         <>
@@ -1046,9 +1058,12 @@ function normalizeProviderSettings(settings: AppSettings): AppSettings {
     [settings.providerId]: settings.aiConfig,
   };
   const activeConfig = getProviderConfig(provider.id, providerConfigs, settings.aiConfig);
+  const knownModels = settings.providerModels?.[provider.id]?.length
+    ? settings.providerModels[provider.id]
+    : provider.models;
   const model =
-    provider.models.length > 0 && !provider.models.includes(activeConfig.model)
-      ? provider.defaultModel
+    knownModels.length > 0 && !knownModels.includes(activeConfig.model)
+      ? (knownModels.includes(provider.defaultModel) ? provider.defaultModel : knownModels[0])
       : activeConfig.model;
 
   const baseUrl = activeConfig.baseUrl || provider.baseUrl;
@@ -1077,9 +1092,10 @@ function getProviderConfig(providerId: string, providerConfigs: Record<string, A
   const provider = PROVIDERS.find((p) => p.id === providerId) || PROVIDERS[0];
   const saved = providerConfigs[providerId];
   if (saved) {
+    const baseUrl = normalizeProviderBaseUrl(providerId, saved.baseUrl || provider.baseUrl);
     return {
       ...saved,
-      baseUrl: saved.baseUrl || provider.baseUrl,
+      baseUrl,
       model: saved.model || provider.defaultModel,
       transcriptionModel: saved.transcriptionModel || currentConfig?.transcriptionModel || 'whisper-1',
       transcriptionBaseUrl: saved.transcriptionBaseUrl || currentConfig?.transcriptionBaseUrl || '',
@@ -1096,6 +1112,14 @@ function getProviderConfig(providerId: string, providerConfigs: Record<string, A
     transcriptionApiKey: currentConfig?.transcriptionApiKey || '',
     transcriptionWorkerUrl: currentConfig?.transcriptionWorkerUrl || '',
   };
+}
+
+function normalizeProviderBaseUrl(providerId: string, baseUrl: string): string {
+  const value = (baseUrl || '').trim();
+  if (providerId === 'gemini' && /^https:\/\/generativelanguage\.googleapis\.com\/v1\/?$/i.test(value)) {
+    return 'https://generativelanguage.googleapis.com/v1beta/openai';
+  }
+  return value;
 }
 
 function stripPartSuffix(title: string): string {

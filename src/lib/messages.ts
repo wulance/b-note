@@ -27,7 +27,7 @@ export type RuntimeMessage =
       transcript?: string;
       config: AIConfig;
     }
-  | { type: 'FETCH_MODELS'; config: AIConfig }
+  | { type: 'FETCH_MODELS'; config: AIConfig; providerId?: string; fallbackModels?: string[] }
   | { type: 'TEST_AI_CONFIG'; config: AIConfig }
   | {
       type: 'ASK_VIDEO';
