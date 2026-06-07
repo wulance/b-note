@@ -164,17 +164,70 @@ async function captureVisibleTabFrame(
     throw new Error('视频帧截图失败。请先切回当前 B 站视频标签页，再点截图');
   }
 
+  const prepared = await browser.tabs
+    .sendMessage(tab.id, {
+      type: 'PREPARE_VISIBLE_FRAME',
+      seconds: requestedSeconds,
+    })
+    .catch((error: any) => ({ error: error?.message || '可见区域截图准备失败' }));
+
+  if (prepared?.error) {
+    throw new Error(prepared.error);
+  }
+
   const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, {
     format: 'jpeg',
     quality: 82,
   });
+  const croppedDataUrl = prepared?.rect
+    ? await cropVisibleTabToRect(dataUrl, prepared.rect, Number(prepared.devicePixelRatio) || 1)
+    : dataUrl;
   return {
     ok: true,
-    dataUrl,
-    seconds: Number.isFinite(capturedSeconds) ? capturedSeconds : requestedSeconds || 0,
+    dataUrl: croppedDataUrl,
+    seconds: Number.isFinite(prepared?.seconds)
+      ? Number(prepared.seconds)
+      : Number.isFinite(capturedSeconds)
+        ? capturedSeconds
+        : requestedSeconds || 0,
     width: 0,
     height: 0,
   };
+}
+
+async function cropVisibleTabToRect(
+  dataUrl: string,
+  rect: { x: number; y: number; width: number; height: number },
+  devicePixelRatio: number,
+) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+  const scale = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const sx = clamp(Math.round(rect.x * scale), 0, bitmap.width - 1);
+  const sy = clamp(Math.round(rect.y * scale), 0, bitmap.height - 1);
+  const sw = clamp(Math.round(rect.width * scale), 1, bitmap.width - sx);
+  const sh = clamp(Math.round(rect.height * scale), 1, bitmap.height - sy);
+  const canvas = new OffscreenCanvas(sw, sh);
+  const context = canvas.getContext('2d');
+  if (!context) return dataUrl;
+  context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+  bitmap.close();
+  const cropped = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.82 });
+  return blobToDataUrl(cropped);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('图片裁剪失败'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 interface BilibiliTab {

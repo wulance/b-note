@@ -34,6 +34,7 @@ export type RuntimeMessage =
 
 export type ContentMessage =
   | { type: 'CAPTURE_VIDEO_FRAME'; seconds?: number }
+  | { type: 'PREPARE_VISIBLE_FRAME'; seconds?: number }
   | { type: 'SEEK_TO_TIME'; seconds: number };
 
 export interface RuntimeOkResponse {

@@ -28,6 +28,12 @@ export default defineContentScript({
           .catch((error: any) => sendResponse({ error: error?.message || '截图失败' }));
         return true;
       }
+      if (contentMessage.type === 'PREPARE_VISIBLE_FRAME') {
+        prepareVisibleFrame(Number.isFinite(contentMessage.seconds) ? Number(contentMessage.seconds) : undefined)
+          .then(sendResponse)
+          .catch((error: any) => sendResponse({ error: error?.message || '可见区域截图准备失败' }));
+        return true;
+      }
       if (contentMessage.type !== 'SEEK_TO_TIME') return;
       try {
         seekToTime(Number(contentMessage.seconds));
@@ -57,6 +63,36 @@ async function detectAndReport() {
     browser.runtime.sendMessage(message);
     console.log('[b-note] Video detected:', video.title, 'cid:', video.cid, 'aid:', video.aid);
   }
+}
+
+async function prepareVisibleFrame(seconds?: number) {
+  const player = findBestVideoPlayer();
+  if (!player) {
+    throw new Error('没有找到当前页面的视频播放器');
+  }
+  if (seconds != null) {
+    player.pause();
+    await seekAndWait(player, seconds);
+  }
+  await waitForVideoReady(player);
+  await waitForDrawableFrame(player, seconds ?? player.currentTime);
+  player.scrollIntoView({ block: 'center', inline: 'center' });
+  await waitForAnimationFrames(2);
+  const rect = player.getBoundingClientRect();
+  if (rect.width < 8 || rect.height < 8) {
+    throw new Error('视频区域不可见，请切回播放器附近再截图');
+  }
+  return {
+    ok: true,
+    seconds: player.currentTime,
+    rect: {
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height,
+    },
+    devicePixelRatio: window.devicePixelRatio || 1,
+  };
 }
 
 async function captureVideoFrame(seconds?: number) {
