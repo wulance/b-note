@@ -129,6 +129,8 @@ npm run build
 4. 如需 Obsidian，配置 vault、目标文件夹、标签、frontmatter 映射和模板。
 5. 如需发布，配置 Telegraph、Telegram 或 Webhook 相关选项。
 
+每个 AI 服务商会单独保存自己的 Base URL、API Key 和模型名。比如 DeepSeek、Gemini、OpenRouter 可以分别填写不同 Key，切换服务商时会自动恢复该服务商上次保存的配置。
+
 典型 OpenAI 兼容配置：
 
 ```text

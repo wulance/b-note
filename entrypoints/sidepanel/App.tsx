@@ -135,7 +135,14 @@ export default function App() {
   }, [notice]);
 
   const updateConfig = (nextConfig: AIConfig) => {
-    setSettings((current) => ({ ...current, aiConfig: nextConfig }));
+    setSettings((current) => ({
+      ...current,
+      aiConfig: nextConfig,
+      providerConfigs: {
+        ...current.providerConfigs,
+        [current.providerId]: nextConfig,
+      },
+    }));
   };
 
   const updateObsidian = (nextObsidian: ObsidianConfig) => {
@@ -180,22 +187,20 @@ export default function App() {
 
   const isStaleRequest = (requestSeq: number) => requestSeq !== requestSeqRef.current;
 
-  // 切换预设时自动填充
   const selectProvider = (id: string) => {
-    const p = PROVIDERS.find((pr) => pr.id === id)!;
     setSettings((current) => ({
       ...current,
       providerId: id,
-      aiConfig: {
-        apiKey: current.aiConfig.apiKey,
-        baseUrl: p.baseUrl,
-        model: p.defaultModel,
-        transcriptionModel: current.aiConfig.transcriptionModel || 'whisper-1',
-        transcriptionBaseUrl: current.aiConfig.transcriptionBaseUrl || '',
-        transcriptionApiKey: current.aiConfig.transcriptionApiKey || '',
-        transcriptionWorkerUrl: current.aiConfig.transcriptionWorkerUrl || '',
+      aiConfig: getProviderConfig(id, {
+        ...current.providerConfigs,
+        [current.providerId]: current.aiConfig,
+      }, current.aiConfig),
+      providerConfigs: {
+        ...current.providerConfigs,
+        [current.providerId]: current.aiConfig,
       },
     }));
+    setLastApiTestUsage(null);
   };
 
   const testApiConfig = async () => {
@@ -973,25 +978,60 @@ export default function App() {
 
 function normalizeProviderSettings(settings: AppSettings): AppSettings {
   const provider = PROVIDERS.find((p) => p.id === settings.providerId) || PROVIDERS[0];
+  const providerConfigs = {
+    ...(settings.providerConfigs || {}),
+    [settings.providerId]: settings.aiConfig,
+  };
+  const activeConfig = getProviderConfig(provider.id, providerConfigs, settings.aiConfig);
   const model =
-    provider.models.length > 0 && !provider.models.includes(settings.aiConfig.model)
+    provider.models.length > 0 && !provider.models.includes(activeConfig.model)
       ? provider.defaultModel
-      : settings.aiConfig.model;
+      : activeConfig.model;
 
-  const baseUrl = settings.aiConfig.baseUrl || provider.baseUrl;
+  const baseUrl = activeConfig.baseUrl || provider.baseUrl;
+  const aiConfig = {
+    ...activeConfig,
+    baseUrl,
+    model,
+    transcriptionModel: activeConfig.transcriptionModel || 'whisper-1',
+    transcriptionBaseUrl: activeConfig.transcriptionBaseUrl || '',
+    transcriptionApiKey: activeConfig.transcriptionApiKey || '',
+    transcriptionWorkerUrl: activeConfig.transcriptionWorkerUrl || '',
+  };
 
   return {
     ...settings,
     providerId: provider.id,
-    aiConfig: {
-      ...settings.aiConfig,
-      baseUrl,
-      model,
-      transcriptionModel: settings.aiConfig.transcriptionModel || 'whisper-1',
-      transcriptionBaseUrl: settings.aiConfig.transcriptionBaseUrl || '',
-      transcriptionApiKey: settings.aiConfig.transcriptionApiKey || '',
-      transcriptionWorkerUrl: settings.aiConfig.transcriptionWorkerUrl || '',
+    aiConfig,
+    providerConfigs: {
+      ...providerConfigs,
+      [provider.id]: aiConfig,
     },
+  };
+}
+
+function getProviderConfig(providerId: string, providerConfigs: Record<string, AIConfig>, currentConfig?: AIConfig): AIConfig {
+  const provider = PROVIDERS.find((p) => p.id === providerId) || PROVIDERS[0];
+  const saved = providerConfigs[providerId];
+  if (saved) {
+    return {
+      ...saved,
+      baseUrl: saved.baseUrl || provider.baseUrl,
+      model: saved.model || provider.defaultModel,
+      transcriptionModel: saved.transcriptionModel || currentConfig?.transcriptionModel || 'whisper-1',
+      transcriptionBaseUrl: saved.transcriptionBaseUrl || currentConfig?.transcriptionBaseUrl || '',
+      transcriptionApiKey: saved.transcriptionApiKey || currentConfig?.transcriptionApiKey || '',
+      transcriptionWorkerUrl: saved.transcriptionWorkerUrl || currentConfig?.transcriptionWorkerUrl || '',
+    };
+  }
+  return {
+    apiKey: '',
+    baseUrl: provider.baseUrl,
+    model: provider.defaultModel,
+    transcriptionModel: currentConfig?.transcriptionModel || 'whisper-1',
+    transcriptionBaseUrl: currentConfig?.transcriptionBaseUrl || '',
+    transcriptionApiKey: currentConfig?.transcriptionApiKey || '',
+    transcriptionWorkerUrl: currentConfig?.transcriptionWorkerUrl || '',
   };
 }
 

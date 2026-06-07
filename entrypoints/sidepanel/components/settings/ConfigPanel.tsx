@@ -116,6 +116,9 @@ export function ConfigPanel({
                     </button>
                   ))}
                 </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                  每个提供商会单独保存 Base URL、API Key 和模型；切换回来会恢复上次填写的配置。
+                </p>
               </div>
 
               <div>

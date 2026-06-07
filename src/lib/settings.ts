@@ -28,6 +28,7 @@ export interface WebhookConfig {
 export interface AppSettings {
   providerId: string;
   aiConfig: AIConfig;
+  providerConfigs: Record<string, AIConfig>;
   obsidian: ObsidianConfig;
   telegram: TelegramConfig;
   webhook: WebhookConfig;
@@ -50,6 +51,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     transcriptionApiKey: '',
     transcriptionWorkerUrl: '',
   },
+  providerConfigs: {},
   obsidian: {
     vault: '',
     folder: 'B站视频笔记',
@@ -95,12 +97,16 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
 
 export function normalizeSettings(value: unknown): AppSettings {
   const settings = value as Partial<AppSettings> | undefined;
+  const providerId = settings?.providerId || DEFAULT_SETTINGS.providerId;
+  const providerConfigs = normalizeProviderConfigs(settings?.providerConfigs);
+  const activeConfig = normalizeAiConfig(settings?.aiConfig);
+  if (!providerConfigs[providerId]) {
+    providerConfigs[providerId] = activeConfig;
+  }
   return {
-    providerId: settings?.providerId || DEFAULT_SETTINGS.providerId,
-    aiConfig: {
-      ...DEFAULT_SETTINGS.aiConfig,
-      ...(settings?.aiConfig || {}),
-    },
+    providerId,
+    aiConfig: providerConfigs[providerId],
+    providerConfigs,
     obsidian: {
       ...DEFAULT_SETTINGS.obsidian,
       ...(settings?.obsidian || {}),
@@ -128,6 +134,22 @@ export function normalizeSettings(value: unknown): AppSettings {
       ? settings.autoCaptureKeyFrames
       : DEFAULT_SETTINGS.autoCaptureKeyFrames,
   };
+}
+
+function normalizeAiConfig(value: unknown): AIConfig {
+  return {
+    ...DEFAULT_SETTINGS.aiConfig,
+    ...((value as Partial<AIConfig> | undefined) || {}),
+  };
+}
+
+function normalizeProviderConfigs(value: unknown): Record<string, AIConfig> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key.length > 0)
+      .map(([key, config]) => [key, normalizeAiConfig(config)])
+  );
 }
 
 function isSummaryMode(value: unknown): value is SummaryMode {
