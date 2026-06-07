@@ -317,6 +317,7 @@ export function ContentArea({
         onExtract={onExtract}
         onBatchGenerate={onBatchGenerate}
         onSelectPage={onSelectPage}
+        onNotice={onNotice}
       />
     );
   }
@@ -447,11 +448,13 @@ function SubtitlesPage({
   onExtract,
   onBatchGenerate,
   onSelectPage,
+  onNotice,
 }: {
   state: AppState;
   onExtract: () => void;
   onBatchGenerate: () => void;
   onSelectPage: (page: number) => void;
+  onNotice: (message: string | null) => void;
 }) {
   const isLoading = state.status === 'loading_subtitle' || state.status === 'summarizing';
   const subtitles = state.subtitles || [];
@@ -459,6 +462,18 @@ function SubtitlesPage({
   const copySubtitles = async () => {
     if (!subtitleText.trim()) return;
     await navigator.clipboard.writeText(subtitleText).catch(() => undefined);
+  };
+  const seekToSubtitle = async (seconds: number) => {
+    try {
+      const response = await sendRuntimeMessage({ type: 'SEEK_TO_TIME', seconds });
+      if ('error' in response) {
+        onNotice(`跳转失败：${response.error}`);
+        return;
+      }
+      onNotice(`已跳转到 ${formatTime(seconds)}`);
+    } catch (error: any) {
+      onNotice(`跳转失败：${error?.message || '未知错误'}`);
+    }
   };
 
   return (
@@ -514,13 +529,17 @@ function SubtitlesPage({
               <button
                 key={`${s.from}:${i}`}
                 type="button"
-                onClick={() => sendRuntimeMessage({ type: 'SEEK_TO_TIME', seconds: s.from })}
-                className="flex w-full gap-3 px-3 py-2.5 text-left transition hover:bg-black/[0.03]"
+                onClick={() => seekToSubtitle(s.from)}
+                title={`跳转到 ${formatTime(s.from)}`}
+                className="group flex w-full gap-3 px-3 py-2.5 text-left transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-[rgba(0,122,255,0.25)]"
               >
                 <span className="w-12 shrink-0 font-mono text-[11px] font-semibold text-[var(--bn-accent)]">
                   {formatTime(s.from)}
                 </span>
-                <span className="text-[13px] leading-6 text-[var(--bn-text)]">{s.content}</span>
+                <span className="min-w-0 flex-1 text-[13px] leading-6 text-[var(--bn-text)]">{s.content}</span>
+                <span className="shrink-0 self-start rounded-full bg-black/[0.04] px-2 py-0.5 text-[10px] font-semibold text-[var(--bn-text-tertiary)] opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
+                  跳转
+                </span>
               </button>
             ))}
           </div>
