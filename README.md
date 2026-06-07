@@ -136,6 +136,16 @@ Base URL: https://api.openai.com/v1
 Model: gpt-4.1-mini
 ```
 
+内置的免费/低门槛预设：
+
+| 服务商 | Base URL | 推荐模型 | 说明 |
+| --- | --- | --- | --- |
+| Gemini 免费层 | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash` | Google AI Studio 可创建 API Key，免费层有 RPM/RPD 限制，适合日常总结。 |
+| OpenRouter 免费模型 | `https://openrouter.ai/api/v1` | `openrouter/free` | 自动路由到可用免费模型；免费模型会随平台容量变化。 |
+| Groq 免费层 | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | 速度快，免费层有速率限制，适合短视频和普通笔记。 |
+| Cloudflare Workers AI 免费额度 | `https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/v1` | `@cf/meta/llama-3.1-8b-instruct` | 需要把 `YOUR_ACCOUNT_ID` 换成自己的 Cloudflare Account ID，并填写 API Token。 |
+| Ollama 本地 | `http://localhost:11434/v1` | `qwen3` | 不走云端 API，免费但依赖本机模型和硬件。 |
+
 Ollama 本地模型示例：
 
 ```text
@@ -192,6 +202,9 @@ npm run transcription:worker
 - b-note 是浏览器扩展，不是官方 B 站功能；字幕、音频和视频元信息能否获取取决于登录态、视频权限和 B 站接口变化。
 - API Key 保存在扩展本地 `storage.local`。不要把本地配置、截图包或导出的私密笔记提交到公开仓库。
 - Anthropic 官方 API 不是 OpenAI Chat Completions 协议；如需使用 Claude，请填写兼容该协议的代理或网关。
+- Gemini、OpenRouter、Groq 和 Cloudflare Workers AI 虽有免费层或免费额度，但仍需要用户自己申请 API Key；不要把个人 Key 写进代码或公开仓库。
+- OpenRouter 的 `openrouter/free` 会自动选择可用免费模型，输出质量和上下文长度可能随路由结果变化。
+- Cloudflare Workers AI 的 Base URL 包含 Account ID，占位符 `YOUR_ACCOUNT_ID` 必须替换，否则 API 测试会失败。
 - Ollama 默认使用 `http://localhost:11434/v1`，本地模型名需要与你本机部署一致。
 - Whisper 降级依赖当前 Base URL 支持 OpenAI 风格的 `/audio/transcriptions`，例如 OpenAI 或兼容网关；DeepSeek 等纯聊天接口通常不支持。
 - 浏览器内自动转写会下载 B 站音频流；超过 24MB 的音频需配置长视频转写 Worker，部分 CDN 也可能因防盗链导致下载失败。
