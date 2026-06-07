@@ -479,7 +479,7 @@ function SubtitlesPage({
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              onClick={onExtract}
+              onClick={() => onExtract()}
               disabled={isLoading}
               className="bn-button-primary flex-1 disabled:opacity-50"
             >
