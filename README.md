@@ -92,6 +92,48 @@ tests/
 
 ## 使用方式
 
+### Chrome 本地安装
+
+如果还没有通过 Chrome Web Store 安装，可以用开发者模式在本地加载扩展：
+
+1. 下载或克隆本仓库：
+
+```bash
+git clone https://github.com/wulance/b-note.git
+cd b-note
+npm install
+```
+
+2. 构建 Chrome 扩展：
+
+```bash
+npm run build
+```
+
+3. 打开 Chrome 扩展管理页：
+
+```text
+chrome://extensions
+```
+
+4. 打开右上角“开发者模式”。
+5. 点击“加载已解压的扩展程序”。
+6. 选择项目里的构建目录：
+
+```text
+.output/chrome-mv3
+```
+
+7. 打开任意 B 站视频页，点击 Chrome 工具栏里的 b-note 图标，侧边栏会自动打开。
+
+如果只是想分发给朋友使用，可以先在本机运行：
+
+```bash
+npm run zip
+```
+
+然后把 `.output/b-note-版本号-chrome.zip` 发给对方。对方解压后，同样在 `chrome://extensions` 里选择解压后的 `chrome-mv3` 目录进行加载。Chrome Web Store 外安装的扩展不会自动更新，新版本需要重新下载、解压并加载。
+
 ### 开发运行
 
 1. 克隆仓库并安装依赖：
