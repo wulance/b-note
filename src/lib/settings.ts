@@ -29,6 +29,7 @@ export interface AppSettings {
   providerId: string;
   aiConfig: AIConfig;
   providerConfigs: Record<string, AIConfig>;
+  providerModels: Record<string, string[]>;
   obsidian: ObsidianConfig;
   telegram: TelegramConfig;
   webhook: WebhookConfig;
@@ -52,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     transcriptionWorkerUrl: '',
   },
   providerConfigs: {},
+  providerModels: {},
   obsidian: {
     vault: '',
     folder: 'B站视频笔记',
@@ -99,6 +101,7 @@ export function normalizeSettings(value: unknown): AppSettings {
   const settings = value as Partial<AppSettings> | undefined;
   const providerId = settings?.providerId || DEFAULT_SETTINGS.providerId;
   const providerConfigs = normalizeProviderConfigs(settings?.providerConfigs);
+  const providerModels = normalizeProviderModels(settings?.providerModels);
   const activeConfig = normalizeAiConfig(settings?.aiConfig);
   if (!providerConfigs[providerId]) {
     providerConfigs[providerId] = activeConfig;
@@ -107,6 +110,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     providerId,
     aiConfig: providerConfigs[providerId],
     providerConfigs,
+    providerModels,
     obsidian: {
       ...DEFAULT_SETTINGS.obsidian,
       ...(settings?.obsidian || {}),
@@ -149,6 +153,20 @@ function normalizeProviderConfigs(value: unknown): Record<string, AIConfig> {
     Object.entries(value as Record<string, unknown>)
       .filter(([key]) => key.length > 0)
       .map(([key, config]) => [key, normalizeAiConfig(config)])
+  );
+}
+
+function normalizeProviderModels(value: unknown): Record<string, string[]> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, models]) => [
+        key,
+        Array.isArray(models)
+          ? [...new Set(models.map((model) => String(model || '').trim()).filter(Boolean))]
+          : [],
+      ])
+      .filter(([key, models]) => key.length > 0 && (models as string[]).length > 0)
   );
 }
 

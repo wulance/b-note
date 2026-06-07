@@ -33,6 +33,10 @@ export interface TagGenerationResult {
   usage: TokenUsage | null;
 }
 
+export interface ModelListResult {
+  models: string[];
+}
+
 export interface SummaryStreamEvent {
   content: string;
   delta: string;
@@ -225,6 +229,37 @@ export async function summarize(
     usage: normalizeUsage(data.usage),
     chunks: 1,
   };
+}
+
+export async function fetchAvailableModels(config: AIConfig): Promise<ModelListResult> {
+  const response = await fetch(modelsUrl(config.baseUrl), {
+    method: 'GET',
+    headers: {
+      ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`模型列表获取失败 (${response.status}): ${errorText}`);
+  }
+
+  const payload = await response.json();
+  const models = parseModelIds(payload);
+  if (!models.length) {
+    throw new Error('服务商返回了模型列表，但没有可识别的模型 ID');
+  }
+  return { models };
+}
+
+function parseModelIds(payload: unknown): string[] {
+  const data = (payload as any)?.data;
+  const source = Array.isArray(data) ? data : Array.isArray(payload) ? payload : [];
+  return [...new Set(source
+    .map((item: any) => typeof item === 'string' ? item : item?.id || item?.name)
+    .map((id: unknown) => String(id || '').trim())
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
 }
 
 export async function summarizeStream(
@@ -817,6 +852,10 @@ function sumUsage(usages: TokenUsage[], key: keyof TokenUsage): number | undefin
 
 function chatCompletionsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/g, '')}/chat/completions`;
+}
+
+function modelsUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/g, '')}/models`;
 }
 
 function normalizeUsage(usage: any): TokenUsage | null {

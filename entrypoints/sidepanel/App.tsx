@@ -27,7 +27,7 @@ import { buildCollectionMarkdown, mergeTokenUsage, type CollectionPartNote } fro
 import { ensureKeyFrameMarkers, extractKeyFrameTargets } from '@/src/lib/markdown';
 import { normalizeKeyFrames } from '@/src/lib/keyFrames';
 import { sendRuntimeMessage } from '@/src/lib/extensionApi';
-import type { RuntimeErrorResponse, SubtitleResponse, SummaryResponse, TagGenerationResponse } from '@/src/lib/messages';
+import type { ModelListResponse, RuntimeErrorResponse, SubtitleResponse, SummaryResponse, TagGenerationResponse } from '@/src/lib/messages';
 import {
   type ChatMessage,
   type KeyFrame,
@@ -66,6 +66,7 @@ export default function App() {
   const [history, setHistory] = useState<SavedNoteDraft[]>([]);
   const [activeView, setActiveView] = useState<AppView>('summary');
   const [apiTestStatus, setApiTestStatus] = useState<'idle' | 'testing'>('idle');
+  const [modelFetchStatus, setModelFetchStatus] = useState<'idle' | 'loading'>('idle');
   const [lastApiTestUsage, setLastApiTestUsage] = useState<TokenUsage | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatStatus, setChatStatus] = useState<'idle' | 'asking'>('idle');
@@ -79,6 +80,7 @@ export default function App() {
   const webhook = settings.webhook;
   const pricing = settings.pricing;
   const provider = PROVIDERS.find((p) => p.id === providerId) || PROVIDERS[0];
+  const modelOptions = settings.providerModels[providerId] || provider.models;
   const estimatedSubtitleTokens = useMemo(
     () => (state.subtitleText ? estimateTokenCount(state.subtitleText) : null),
     [state.subtitleText]
@@ -235,6 +237,64 @@ export default function App() {
       addLog(`API 测试失败：${e?.message || '未知错误'}`);
     } finally {
       setApiTestStatus('idle');
+    }
+  };
+
+  const fetchProviderModels = async () => {
+    const normalizedSettings = normalizeProviderSettings(settings);
+    const requestConfig = normalizedSettings.aiConfig;
+    const requestProvider = PROVIDERS.find((p) => p.id === normalizedSettings.providerId) || provider;
+    if (!requestConfig.baseUrl.trim()) {
+      setNotice('请先填写 Base URL 后再获取模型');
+      return;
+    }
+    if (!requestConfig.apiKey.trim() && requestProvider.id !== 'ollama') {
+      setNotice('请先配置 API Key 后再获取模型');
+      addLog('模型获取未开始：缺少 API Key');
+      return;
+    }
+
+    setModelFetchStatus('loading');
+    setNotice(null);
+    addLog(`开始获取模型列表：${requestProvider.name}`);
+    try {
+      const response = await sendRuntimeMessage<ModelListResponse | RuntimeErrorResponse>({
+        type: 'FETCH_MODELS',
+        config: requestConfig,
+      });
+      if ('error' in response) {
+        setNotice(`模型获取失败：${response.error}`);
+        addLog(`模型获取失败：${response.error}`);
+        return;
+      }
+      const models = response.models || [];
+      if (!models.length) {
+        setNotice('模型获取失败：没有可用模型');
+        return;
+      }
+      setSettings((current) => {
+        const nextModel = models.includes(current.aiConfig.model) ? current.aiConfig.model : models[0];
+        const nextConfig = { ...current.aiConfig, model: nextModel };
+        return {
+          ...current,
+          aiConfig: nextConfig,
+          providerConfigs: {
+            ...current.providerConfigs,
+            [current.providerId]: nextConfig,
+          },
+          providerModels: {
+            ...current.providerModels,
+            [current.providerId]: models,
+          },
+        };
+      });
+      setNotice(`已获取 ${models.length} 个模型`);
+      addLog(`模型列表已更新：${models.length} 个`);
+    } catch (error: any) {
+      setNotice(`模型获取失败：${error?.message || '未知错误'}`);
+      addLog(`模型获取失败：${error?.message || '未知错误'}`);
+    } finally {
+      setModelFetchStatus('idle');
     }
   };
 
@@ -897,6 +957,7 @@ export default function App() {
           providerId={providerId}
           onSelectProvider={selectProvider}
           provider={provider}
+          modelOptions={modelOptions}
           obsidian={obsidian}
           onObsidianChange={updateObsidian}
           telegram={telegram}
@@ -910,6 +971,8 @@ export default function App() {
           onTestApi={testApiConfig}
           apiTestStatus={apiTestStatus}
           lastApiTestUsage={lastApiTestUsage}
+          onFetchModels={fetchProviderModels}
+          modelFetchStatus={modelFetchStatus}
         />
       ) : (
         <>

@@ -27,6 +27,7 @@ export type RuntimeMessage =
       transcript?: string;
       config: AIConfig;
     }
+  | { type: 'FETCH_MODELS'; config: AIConfig }
   | { type: 'TEST_AI_CONFIG'; config: AIConfig }
   | {
       type: 'ASK_VIDEO';
@@ -74,6 +75,10 @@ export interface SummaryResponse extends RuntimeOkResponse {
 export interface TagGenerationResponse extends RuntimeOkResponse {
   tags: string[];
   usage: TokenUsage | null;
+}
+
+export interface ModelListResponse extends RuntimeOkResponse {
+  models: string[];
 }
 
 export interface CaptureFrameResponse extends RuntimeOkResponse {

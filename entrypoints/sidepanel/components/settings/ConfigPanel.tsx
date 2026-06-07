@@ -18,6 +18,7 @@ export function ConfigPanel({
   providerId,
   onSelectProvider,
   provider,
+  modelOptions,
   obsidian,
   onObsidianChange,
   telegram,
@@ -31,12 +32,15 @@ export function ConfigPanel({
   onTestApi,
   apiTestStatus,
   lastApiTestUsage,
+  onFetchModels,
+  modelFetchStatus,
 }: {
   config: AIConfig;
   onChange: (c: AIConfig) => void;
   providerId: string;
   onSelectProvider: (id: string) => void;
   provider: ProviderPreset;
+  modelOptions: string[];
   obsidian: ObsidianConfig;
   onObsidianChange: (c: ObsidianConfig) => void;
   telegram: TelegramConfig;
@@ -50,6 +54,8 @@ export function ConfigPanel({
   onTestApi: () => void;
   apiTestStatus: 'idle' | 'testing';
   lastApiTestUsage: TokenUsage | null;
+  onFetchModels: () => void;
+  modelFetchStatus: 'idle' | 'loading';
 }) {
   const [section, setSection] = useState<ConfigSection>('ai');
   const transcriptionWarning = getTranscriptionWarning(config);
@@ -144,14 +150,27 @@ export function ConfigPanel({
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Model</label>
-                {provider.models.length > 0 ? (
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs text-slate-400">Model</label>
+                  <button
+                    type="button"
+                    onClick={onFetchModels}
+                    disabled={modelFetchStatus === 'loading'}
+                    className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    {modelFetchStatus === 'loading' ? '获取中...' : '获取模型'}
+                  </button>
+                </div>
+                {modelOptions.length > 0 ? (
                   <select
                     value={config.model}
                     onChange={(e) => onChange({ ...config, model: e.target.value })}
                     className="mt-0.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                   >
-                    {provider.models.map((m) => (
+                    {!modelOptions.includes(config.model) && config.model && (
+                      <option value={config.model}>{config.model}</option>
+                    )}
+                    {modelOptions.map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>

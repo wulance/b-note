@@ -130,6 +130,7 @@ npm run build
 5. 如需发布，配置 Telegraph、Telegram 或 Webhook 相关选项。
 
 每个 AI 服务商会单独保存自己的 Base URL、API Key 和模型名。比如 DeepSeek、Gemini、OpenRouter 可以分别填写不同 Key，切换服务商时会自动恢复该服务商上次保存的配置。
+设置页的“获取模型”会尝试调用当前 Base URL 的 OpenAI 兼容 `/models` 接口，并把结果保存为该服务商自己的模型列表；如果服务商不支持该接口，可继续使用内置列表或手动填写自定义模型名。
 
 典型 OpenAI 兼容配置：
 

@@ -6,7 +6,7 @@ import {
   extractPageFromUrl,
   type VideoPageInfo,
 } from '@/src/lib/subtitle';
-import { generateNoteTags, summarize, synthesizeCollection, testAIConnection, type SummaryMode, type SummaryTemplate, type AIConfig } from '@/src/lib/summarizer';
+import { fetchAvailableModels, generateNoteTags, summarize, synthesizeCollection, testAIConnection, type SummaryMode, type SummaryTemplate, type AIConfig } from '@/src/lib/summarizer';
 import { answerVideoQuestion } from '@/src/lib/summarizer';
 import { explainTranscriptionError, transcribeBilibiliAudio } from '@/src/lib/transcriber';
 import { loadSubtitleFromCache, saveSubtitleToCache } from '@/src/lib/subtitleCache';
@@ -56,6 +56,11 @@ export default defineBackground(() => {
 
     if (msg.type === 'GENERATE_TAGS') {
       handleGenerateTags(msg, sendResponse);
+      return true;
+    }
+
+    if (msg.type === 'FETCH_MODELS') {
+      handleFetchModels(msg, sendResponse);
       return true;
     }
 
@@ -133,6 +138,16 @@ async function handleGenerateTags(msg: Extract<RuntimeMessage, { type: 'GENERATE
   } catch (e: any) {
     console.error('[b-note] generate tags failed', e);
     sendResponse({ error: e.message || '标签生成失败' });
+  }
+}
+
+async function handleFetchModels(msg: Extract<RuntimeMessage, { type: 'FETCH_MODELS' }>, sendResponse: (r: any) => void) {
+  try {
+    const result = await fetchAvailableModels(msg.config as AIConfig);
+    sendResponse({ ok: true, models: result.models });
+  } catch (e: any) {
+    console.error('[b-note] fetch models failed', e);
+    sendResponse({ error: e.message || '模型列表获取失败' });
   }
 }
 

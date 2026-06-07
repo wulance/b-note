@@ -118,6 +118,12 @@ function handlePreviewMessage(message: RuntimeMessage) {
       usage: { promptTokens: 80, completionTokens: 20, totalTokens: 100 },
     };
   }
+  if (message?.type === 'FETCH_MODELS') {
+    return {
+      ok: true,
+      models: ['preview-fast', 'preview-large', 'preview-local'],
+    };
+  }
   if (message?.type === 'CAPTURE_FRAME') {
     return {
       ok: true,
