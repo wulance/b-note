@@ -372,6 +372,7 @@ export function ContentArea({
           usage={state.usage}
           providerName={state.generatedProviderName}
           model={state.generatedModel}
+          generatedTags={state.generatedTags}
           summaryChunks={state.summaryChunks}
           keyFrames={keyFrames}
           obsidian={obsidian}
@@ -636,6 +637,7 @@ function ResultActions({
   usage,
   providerName,
   model,
+  generatedTags,
   summaryChunks,
   keyFrames,
   obsidian,
@@ -656,6 +658,7 @@ function ResultActions({
   usage: TokenUsage | null;
   providerName: string | null;
   model: string | null;
+  generatedTags: string[] | null;
   summaryChunks: number | null;
   keyFrames: KeyFrame[];
   obsidian: ObsidianConfig;
@@ -668,10 +671,10 @@ function ResultActions({
   frameStatus: 'idle' | 'capturing';
 }) {
   const frontmatterOptions = useMemo(() => ({
-    tags: parseTags(obsidian.tags),
+    tags: mergeTags(parseTags(obsidian.tags), generatedTags),
     extraFrontmatter: parseExtraFrontmatter(obsidian.frontmatter),
     fieldMap: parseFrontmatterFieldMap(obsidian.fieldMapping),
-  }), [obsidian.fieldMapping, obsidian.frontmatter, obsidian.tags]);
+  }), [generatedTags, obsidian.fieldMapping, obsidian.frontmatter, obsidian.tags]);
 
   const markdown = useMemo(() => buildNoteMarkdown({
     videoTitle,
@@ -910,6 +913,18 @@ function ResultActions({
               </>
             ) : null}
           </div>
+          {generatedTags?.length ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {generatedTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-[rgba(0,122,255,0.08)] px-2 py-0.5 text-[10px] font-semibold text-[var(--bn-accent)] ring-1 ring-[rgba(0,122,255,0.12)]"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -979,4 +994,12 @@ function ResultActions({
       </details>
     </div>
   );
+}
+
+function mergeTags(...groups: Array<string[] | null | undefined>): string[] {
+  const tags = groups.flatMap((group) => group || []);
+  return [...new Set(tags
+    .map((tag) => String(tag || '').replace(/^#+/, '').trim())
+    .filter(Boolean))]
+    .slice(0, 12);
 }

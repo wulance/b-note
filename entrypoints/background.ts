@@ -6,7 +6,7 @@ import {
   extractPageFromUrl,
   type VideoPageInfo,
 } from '@/src/lib/subtitle';
-import { summarize, synthesizeCollection, testAIConnection, type SummaryMode, type SummaryTemplate, type AIConfig } from '@/src/lib/summarizer';
+import { generateNoteTags, summarize, synthesizeCollection, testAIConnection, type SummaryMode, type SummaryTemplate, type AIConfig } from '@/src/lib/summarizer';
 import { answerVideoQuestion } from '@/src/lib/summarizer';
 import { explainTranscriptionError, transcribeBilibiliAudio } from '@/src/lib/transcriber';
 import { loadSubtitleFromCache, saveSubtitleToCache } from '@/src/lib/subtitleCache';
@@ -51,6 +51,11 @@ export default defineBackground(() => {
 
     if (msg.type === 'SYNTHESIZE_COLLECTION') {
       handleSynthesizeCollection(msg, sendResponse);
+      return true;
+    }
+
+    if (msg.type === 'GENERATE_TAGS') {
+      handleGenerateTags(msg, sendResponse);
       return true;
     }
 
@@ -113,6 +118,21 @@ async function handleSynthesizeCollection(msg: Extract<RuntimeMessage, { type: '
   } catch (e: any) {
     console.error('[b-note] synthesize collection failed', e);
     sendResponse({ error: e.message || '合集综合总结失败' });
+  }
+}
+
+async function handleGenerateTags(msg: Extract<RuntimeMessage, { type: 'GENERATE_TAGS' }>, sendResponse: (r: any) => void) {
+  try {
+    const result = await generateNoteTags({
+      videoTitle: msg.videoTitle || 'B站视频',
+      note: msg.note || '',
+      transcript: msg.transcript || '',
+      config: msg.config as AIConfig,
+    });
+    sendResponse({ ok: true, tags: result.tags, usage: result.usage });
+  } catch (e: any) {
+    console.error('[b-note] generate tags failed', e);
+    sendResponse({ error: e.message || '标签生成失败' });
   }
 }
 

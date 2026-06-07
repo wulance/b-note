@@ -28,6 +28,11 @@ export interface SummaryResult {
   chunks?: number;
 }
 
+export interface TagGenerationResult {
+  tags: string[];
+  usage: TokenUsage | null;
+}
+
 export interface SummaryStreamEvent {
   content: string;
   delta: string;
@@ -385,6 +390,51 @@ ${transcript}
   return { ...result, chunks: 1 };
 }
 
+export async function generateNoteTags({
+  videoTitle,
+  note,
+  transcript,
+  config,
+}: {
+  videoTitle: string;
+  note: string;
+  transcript?: string | null;
+  config: AIConfig;
+}): Promise<TagGenerationResult> {
+  const compactNote = note.trim().slice(0, 9000);
+  const compactTranscript = (transcript || '').trim().slice(0, 3000);
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content:
+        '你是 Obsidian 知识库标签助手。请只输出 JSON 数组，不要解释。标签用于视频笔记检索，必须简短、稳定、可复用。',
+    },
+    {
+      role: 'user',
+      content: `请为这篇 B 站视频笔记生成 3-6 个标签。
+规则：
+1. 输出严格 JSON 数组，例如 ["AI", "智能体", "OpenClaw"]
+2. 每个标签 2-10 个中文字符或常见英文术语
+3. 避免宽泛标签：视频、笔记、学习、教程、B站、总结
+4. 优先保留产品名、工具名、技术主题、应用场景、风险主题
+5. 不要输出 # 前缀，不要输出句子
+
+视频标题：${videoTitle}
+
+笔记内容：
+${compactNote}
+
+字幕摘录：
+${compactTranscript}`,
+    },
+  ];
+  const result = await sendChatCompletion(config, messages, 0.1, 180);
+  return {
+    tags: parseGeneratedTags(result.content),
+    usage: result.usage,
+  };
+}
+
 export async function synthesizeCollection({
   videoTitle,
   partNotes,
@@ -607,6 +657,25 @@ function normalizeChunkPartial(content: string, index: number): string {
   const body = stripTopLevelTitle(content).trim();
   if (!body) return '';
   return [`### 第 ${index} 段`, '', body].join('\n');
+}
+
+function parseGeneratedTags(content: string): string[] {
+  const text = String(content || '').trim();
+  const candidates: string[] = [];
+  try {
+    const match = text.match(/\[[\s\S]*\]/);
+    const parsed = JSON.parse(match ? match[0] : text);
+    if (Array.isArray(parsed)) {
+      candidates.push(...parsed.map((item) => String(item)));
+    }
+  } catch {
+    candidates.push(...text.split(/[\n,，、#;；]+/g));
+  }
+  const blocked = new Set(['视频', '笔记', '学习', '教程', 'B站', '总结', '视频笔记', 'B站视频笔记']);
+  return [...new Set(candidates
+    .map((tag) => tag.replace(/^#+/, '').trim())
+    .filter((tag) => tag && !blocked.has(tag) && tag.length <= 24))]
+    .slice(0, 6);
 }
 
 function stripTopLevelTitle(content: string): string {

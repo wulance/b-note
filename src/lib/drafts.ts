@@ -13,6 +13,7 @@ export interface SavedNoteDraft {
   providerId?: string;
   providerName?: string;
   model?: string;
+  generatedTags?: string[];
   keyFrames?: KeyFrame[];
   generatedAt: string;
 }
@@ -56,8 +57,17 @@ function normalizeDraft(value: unknown): SavedNoteDraft | null {
   }
   return {
     ...draft,
+    generatedTags: normalizeDraftTags(draft.generatedTags),
     keyFrames: normalizeKeyFrames(draft.keyFrames),
   };
+}
+
+function normalizeDraftTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags
+    .map((tag) => String(tag || '').replace(/^#+/, '').trim())
+    .filter((tag) => tag.length > 0 && tag.length <= 24))]
+    .slice(0, 8);
 }
 
 function createHistoryKey(draft: SavedNoteDraft): string {

@@ -111,6 +111,13 @@ function handlePreviewMessage(message: RuntimeMessage) {
       chunks: 1,
     };
   }
+  if (message?.type === 'GENERATE_TAGS') {
+    return {
+      ok: true,
+      tags: ['B站工具', 'AI总结', 'Obsidian'],
+      usage: { promptTokens: 80, completionTokens: 20, totalTokens: 100 },
+    };
+  }
   if (message?.type === 'CAPTURE_FRAME') {
     return {
       ok: true,
@@ -172,6 +179,7 @@ function seedPreviewData() {
     providerId: 'deepseek',
     providerName: 'DeepSeek',
     model: 'deepseek-v4-pro',
+    generatedTags: ['B站工具', 'AI总结', 'Obsidian'],
     keyFrames: [
       {
         title: '总览 [00:03]',

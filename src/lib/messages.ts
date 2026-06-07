@@ -20,6 +20,13 @@ export type RuntimeMessage =
       template: SummaryTemplate;
       config: AIConfig;
     }
+  | {
+      type: 'GENERATE_TAGS';
+      videoTitle: string;
+      note: string;
+      transcript?: string;
+      config: AIConfig;
+    }
   | { type: 'TEST_AI_CONFIG'; config: AIConfig }
   | {
       type: 'ASK_VIDEO';
@@ -62,6 +69,11 @@ export interface SummaryResponse extends RuntimeOkResponse {
   result: string;
   usage: TokenUsage | null;
   chunks?: number;
+}
+
+export interface TagGenerationResponse extends RuntimeOkResponse {
+  tags: string[];
+  usage: TokenUsage | null;
 }
 
 export interface CaptureFrameResponse extends RuntimeOkResponse {

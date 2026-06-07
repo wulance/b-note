@@ -18,6 +18,7 @@ export interface AppState {
   usage: TokenUsage | null;
   generatedProviderName: string | null;
   generatedModel: string | null;
+  generatedTags: string[] | null;
   summaryChunks: number | null;
   error: string | null;
 }

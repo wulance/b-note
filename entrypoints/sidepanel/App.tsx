@@ -27,7 +27,7 @@ import { buildCollectionMarkdown, mergeTokenUsage, type CollectionPartNote } fro
 import { ensureKeyFrameMarkers, extractKeyFrameTargets } from '@/src/lib/markdown';
 import { normalizeKeyFrames } from '@/src/lib/keyFrames';
 import { sendRuntimeMessage } from '@/src/lib/extensionApi';
-import type { RuntimeErrorResponse, SubtitleResponse, SummaryResponse } from '@/src/lib/messages';
+import type { RuntimeErrorResponse, SubtitleResponse, SummaryResponse, TagGenerationResponse } from '@/src/lib/messages';
 import {
   type ChatMessage,
   type KeyFrame,
@@ -52,6 +52,7 @@ export default function App() {
     usage: null,
     generatedProviderName: null,
     generatedModel: null,
+    generatedTags: null,
     summaryChunks: null,
     error: null,
   });
@@ -112,6 +113,7 @@ export default function App() {
           usage: draft.usage || null,
           generatedProviderName: draft.providerName || null,
           generatedModel: draft.model || null,
+          generatedTags: draft.generatedTags || null,
           summaryChunks: null,
         }));
         setKeyFrames(normalizeKeyFrames(draft.keyFrames));
@@ -245,6 +247,7 @@ export default function App() {
       usage: null,
       generatedProviderName: null,
       generatedModel: null,
+      generatedTags: null,
       summaryChunks: null,
       error: null,
     }));
@@ -288,6 +291,8 @@ export default function App() {
         usage: null,
         generatedProviderName: null,
         generatedModel: null,
+        generatedTags: null,
+        summaryChunks: null,
         error: null,
       }));
       console.log('[b-note] extract subtitles done', {
@@ -330,6 +335,46 @@ export default function App() {
     }
   };
 
+  const generateTagsForNote = async ({
+    videoTitle,
+    note,
+    transcript,
+    config,
+    requestSeq,
+  }: {
+    videoTitle: string;
+    note: string;
+    transcript?: string | null;
+    config: AIConfig;
+    requestSeq: number;
+  }): Promise<{ tags: string[]; usage: TokenUsage | null }> => {
+    try {
+      addLog('正在生成 AI 标签');
+      const response = await sendRuntimeMessage<TagGenerationResponse | RuntimeErrorResponse>({
+        type: 'GENERATE_TAGS',
+        videoTitle,
+        note,
+        transcript: transcript || '',
+        config,
+      });
+      if (isStaleRequest(requestSeq)) return { tags: [], usage: null };
+      if ('error' in response) {
+        addLog(`AI 标签失败：${response.error}`);
+        return { tags: [], usage: null };
+      }
+      const tags = Array.isArray(response.tags) ? response.tags : [];
+      if (tags.length) {
+        addLog(`AI 标签：${tags.join('、')}`);
+      } else {
+        addLog('AI 标签为空，已使用固定标签');
+      }
+      return { tags, usage: response.usage || null };
+    } catch (error: any) {
+      addLog(`AI 标签失败：${error?.message || '未知错误'}`);
+      return { tags: [], usage: null };
+    }
+  };
+
   const runSummarize = async (input?: ExtractedSubtitleResult | null, requestSeq = nextRequestSeq()) => {
     const subtitleText = input?.subtitleText || state.subtitleText;
     const videoInfo = input?.videoInfo || state.videoInfo;
@@ -362,6 +407,7 @@ export default function App() {
       usage: null,
       generatedProviderName: requestProvider.name,
       generatedModel: requestConfig.model,
+      generatedTags: null,
       summaryChunks: null,
       error: null,
     }));
@@ -422,16 +468,25 @@ export default function App() {
       if (!finalContent.trim()) {
         throw new Error('流式总结没有返回内容，请稍后重试');
       }
+      const tagResult = await generateTagsForNote({
+        videoTitle: videoInfo.title,
+        note: finalContent,
+        transcript: subtitleText,
+        config: requestConfig,
+        requestSeq,
+      });
+      const usage = mergeTokenUsage([response.usage || null, tagResult.usage]);
       const draft: SavedNoteDraft = {
         videoInfo,
         content: finalContent,
         source: input?.subtitleSource || state.subtitleSource,
         mode,
         template,
-        usage: response.usage || null,
+        usage,
         providerId: requestProvider.id,
         providerName: requestProvider.name,
         model: requestConfig.model,
+        generatedTags: tagResult.tags,
         keyFrames: [],
         generatedAt,
       };
@@ -444,9 +499,10 @@ export default function App() {
         generatedMode: mode,
         generatedTemplate: template,
         generatedAt,
-        usage: response.usage || null,
+        usage,
         generatedProviderName: requestProvider.name,
         generatedModel: requestConfig.model,
+        generatedTags: tagResult.tags,
         summaryChunks: response.chunks || null,
       }));
       if (autoCaptureFrames) {
@@ -475,7 +531,7 @@ export default function App() {
         addLog('自动关键画面已关闭，可手动点击「截图」或「自动」');
       }
       addLog(
-        `笔记已生成：${getModeLabel(mode)} / ${requestConfig.model}，${formatUsage(response.usage || null)}${
+        `笔记已生成：${getModeLabel(mode)} / ${requestConfig.model}，${formatUsage(usage)}${
           response.chunks && response.chunks > 1 ? `，分 ${response.chunks} 段处理` : ''
         }`
       );
@@ -527,7 +583,14 @@ export default function App() {
     setNotice(null);
     setChatMessages([]);
     setKeyFrames([]);
-    setState((s) => ({ ...s, status: 'summarizing', error: null, result: null }));
+    setState((s) => ({
+      ...s,
+      status: 'summarizing',
+      error: null,
+      result: null,
+      generatedTags: null,
+      summaryChunks: null,
+    }));
     addLog(`开始批量生成合集：${pages.length} 个分 P`);
 
     const partNotes: CollectionPartNote[] = [];
@@ -643,7 +706,15 @@ export default function App() {
       parts: partNotes,
       synthesis,
     });
-    const usage = mergeTokenUsage([...partNotes.map((part) => part.usage), synthesisUsage]);
+    const tagResult = await generateTagsForNote({
+      videoTitle: collectionVideo.title,
+      note: content,
+      transcript: completed.map((part) => `# P${part.page} ${part.title}\n${part.content}`).join('\n\n'),
+      config: requestConfig,
+      requestSeq,
+    });
+    if (isStaleRequest(requestSeq)) return;
+    const usage = mergeTokenUsage([...partNotes.map((part) => part.usage), synthesisUsage, tagResult.usage]);
     const source = partNotes.some((part) => part.source === 'whisper') ? 'whisper' : 'cc';
     const draft: SavedNoteDraft = {
       videoInfo: collectionVideo,
@@ -655,6 +726,7 @@ export default function App() {
       providerId: requestProvider.id,
       providerName: requestProvider.name,
       model: requestConfig.model,
+      generatedTags: tagResult.tags,
       keyFrames: [],
       generatedAt,
     };
@@ -674,6 +746,7 @@ export default function App() {
       usage,
       generatedProviderName: requestProvider.name,
       generatedModel: requestConfig.model,
+      generatedTags: tagResult.tags,
       summaryChunks: partNotes.length,
       error: null,
     }));
@@ -695,6 +768,7 @@ export default function App() {
       usage: draft.usage || null,
       generatedProviderName: draft.providerName || null,
       generatedModel: draft.model || null,
+      generatedTags: draft.generatedTags || null,
       summaryChunks: null,
       error: null,
     }));
@@ -715,6 +789,7 @@ export default function App() {
       providerId,
       providerName: state.generatedProviderName || undefined,
       model: state.generatedModel || undefined,
+      generatedTags: state.generatedTags || [],
       keyFrames: frames,
       generatedAt: state.generatedAt,
     };
