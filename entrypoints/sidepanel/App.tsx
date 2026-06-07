@@ -32,7 +32,7 @@ import {
   type ChatMessage,
   type KeyFrame,
 } from './components/NoteExperience';
-import { ActivityPanel, Header, StatusPanel } from './components/app-shell';
+import { Header, StatusPanel } from './components/app-shell';
 import { ConfigPanel } from './components/settings';
 import { ActionBar, ContentArea } from './components/workflow';
 import { useKeyFrames } from './hooks/useKeyFrames';
@@ -63,7 +63,7 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [history, setHistory] = useState<SavedNoteDraft[]>([]);
-  const [activeView, setActiveView] = useState<AppView>('note');
+  const [activeView, setActiveView] = useState<AppView>('summary');
   const [apiTestStatus, setApiTestStatus] = useState<'idle' | 'testing'>('idle');
   const [lastApiTestUsage, setLastApiTestUsage] = useState<TokenUsage | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -682,7 +682,7 @@ export default function App() {
   };
 
   const restoreDraft = (draft: SavedNoteDraft) => {
-    setActiveView('note');
+    setActiveView('summary');
     setState((s) => ({
       ...s,
       status: 'done',
@@ -831,31 +831,26 @@ export default function App() {
           apiTestStatus={apiTestStatus}
           lastApiTestUsage={lastApiTestUsage}
         />
-      ) : activeView === 'activity' ? (
-        <ActivityPanel
-          logs={activityLog}
-          history={history}
-          onRestoreDraft={restoreDraft}
-          onNotice={setNotice}
-        />
       ) : (
         <>
-          <ActionBar
-            status={state.status}
-            mode={mode}
-            onModeChange={updateMode}
-            template={template}
-            onTemplateChange={updateTemplate}
-            onGenerate={generateNote}
-            onExtract={extractSubtitles}
-            onSummarize={runSummarize}
-            onBatchGenerate={generateCollectionNote}
-            hasSubtitles={!!state.subtitleText}
-            hasResult={!!state.result}
-            estimatedTokens={estimatedSubtitleTokens}
-            videoInfo={state.videoInfo}
-            onSelectPage={selectVideoPage}
-          />
+          {activeView === 'summary' && (
+            <ActionBar
+              status={state.status}
+              mode={mode}
+              onModeChange={updateMode}
+              template={template}
+              onTemplateChange={updateTemplate}
+              onGenerate={generateNote}
+              onExtract={extractSubtitles}
+              onSummarize={runSummarize}
+              onBatchGenerate={generateCollectionNote}
+              hasSubtitles={!!state.subtitleText}
+              hasResult={!!state.result}
+              estimatedTokens={estimatedSubtitleTokens}
+              videoInfo={state.videoInfo}
+              onSelectPage={selectVideoPage}
+            />
+          )}
           <StatusPanel
             logs={[]}
             notice={notice}
@@ -866,9 +861,10 @@ export default function App() {
             history={[]}
             onRestoreDraft={restoreDraft}
             onNotice={setNotice}
-            compact={!!state.result}
+            compact={!!state.result || activeView !== 'subtitles'}
           />
           <ContentArea
+            activeView={activeView}
             state={state}
             obsidian={obsidian}
             telegram={telegram}
@@ -884,6 +880,15 @@ export default function App() {
             onRecaptureKeyFrame={recaptureKeyFrame}
             onDeleteKeyFrame={deleteKeyFrame}
             frameStatus={frameStatus}
+            onExtract={extractSubtitles}
+            onBatchGenerate={generateCollectionNote}
+            onSelectPage={selectVideoPage}
+            onOpenSummary={(headingId) => {
+              setActiveView('summary');
+              window.setTimeout(() => {
+                if (headingId) document.getElementById(headingId)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+              }, 60);
+            }}
           />
         </>
       )}

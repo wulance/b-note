@@ -25,6 +25,7 @@ import { publishToTelegraph } from '@/src/lib/telegraph';
 import { publishToTelegram } from '@/src/lib/telegram';
 import { publishToWebhook } from '@/src/lib/webhook';
 import { extractMarkdownOutline } from '@/src/lib/markdown';
+import { sendRuntimeMessage } from '@/src/lib/extensionApi';
 import {
   buildObsidianNotePath,
   buildObsidianRestNotePath,
@@ -39,7 +40,7 @@ import {
   type ChatMessage,
   type KeyFrame,
 } from '../NoteExperience';
-import type { AppState, Status } from '../../types';
+import type { AppState, AppView, Status } from '../../types';
 
 export function ActionBar({
   status,
@@ -76,12 +77,12 @@ export function ActionBar({
 
   if (hasResult) {
     return (
-      <div className="border-b border-slate-200 bg-white px-3 py-2">
+      <div className="border-b border-[var(--bn-separator-soft)] bg-[var(--bn-chrome)] px-3 py-2 backdrop-blur-xl">
         <div className="flex items-center gap-1.5 overflow-x-auto">
           <button
             onClick={onGenerate}
             disabled={isLoading}
-            className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
+            className="shrink-0 rounded-[8px] bg-[var(--bn-accent)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--bn-accent-hover)] disabled:opacity-50"
           >
             {isLoading ? '生成中' : '重生成'}
           </button>
@@ -89,14 +90,14 @@ export function ActionBar({
             onClick={() => onExtract()}
             disabled={isLoading}
             title="只获取当前视频字幕，不消耗总结 token"
-            className="shrink-0 rounded-md bg-slate-100 px-2.5 py-1.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-200 disabled:opacity-50"
+            className="shrink-0 rounded-[8px] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03] disabled:opacity-50"
           >
             字幕
           </button>
-          <span className="shrink-0 rounded-md bg-blue-50 px-2 py-1.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-100">
+          <span className="shrink-0 rounded-full bg-black/[0.05] px-2 py-1.5 text-[11px] font-semibold text-[var(--bn-text-secondary)]">
             {getModeLabel(mode)}
           </span>
-          <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+          <span className="shrink-0 rounded-full bg-black/[0.05] px-2 py-1.5 text-[11px] font-semibold text-[var(--bn-text-secondary)]">
             {getTemplateLabel(template)}
           </span>
           <PartSelector videoInfo={videoInfo} disabled={isLoading} onSelectPage={onSelectPage} compact />
@@ -107,7 +108,7 @@ export function ActionBar({
   }
 
   return (
-    <div className="space-y-3 border-b border-slate-200 bg-white px-3 py-3 shadow-sm">
+    <div className="space-y-3 border-b border-[var(--bn-separator-soft)] bg-[var(--bn-chrome)] px-3 py-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl">
       <div className="flex items-start gap-2">
         <PartSelector videoInfo={videoInfo} disabled={isLoading} onSelectPage={onSelectPage} />
         <BatchButton videoInfo={videoInfo} disabled={isLoading} onBatchGenerate={onBatchGenerate} />
@@ -115,7 +116,7 @@ export function ActionBar({
       <button
         onClick={onGenerate}
         disabled={isLoading}
-        className="flex min-h-10 w-full items-center justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
+        className="bn-button-primary flex w-full items-center justify-center px-3 py-2.5 text-sm shadow-sm disabled:opacity-50"
       >
         {status === 'loading_subtitle'
           ? '提取/转写中...'
@@ -129,7 +130,7 @@ export function ActionBar({
           onClick={() => onExtract()}
           disabled={isLoading}
           title="只获取当前视频字幕，不消耗总结 token"
-          className="rounded-md bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-100 disabled:opacity-50"
+          className="bn-button-secondary px-3 py-2 text-xs disabled:opacity-50"
         >
           {status === 'loading_subtitle' ? '提取/转写中...' : '1. 提取字幕'}
         </button>
@@ -137,7 +138,7 @@ export function ActionBar({
           onClick={() => onSummarize()}
           disabled={!hasSubtitles || isLoading}
           title="使用当前字幕生成笔记，会调用已配置的 AI API"
-          className="rounded-md bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-100 disabled:opacity-50"
+          className="bn-button-secondary px-3 py-2 text-xs disabled:opacity-50"
         >
           {status === 'summarizing' ? '生成中...' : '2. AI 总结'}
         </button>
@@ -150,7 +151,7 @@ export function ActionBar({
           {estimatedTokens ? ` · 输入约 ${estimatedTokens.toLocaleString()} tokens` : ''}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+      <div className="grid grid-cols-3 gap-1 rounded-[10px] bg-black/[0.05] p-1 ring-1 ring-black/[0.04]">
         {(['quick', 'standard', 'detailed'] as SummaryMode[]).map((m) => (
           <button
             key={m}
@@ -159,12 +160,11 @@ export function ActionBar({
             title={`切换为${getModeLabel(m)}模式`}
             className={`flex min-h-8 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs transition ${
               mode === m
-                ? 'bg-white font-bold text-blue-700 shadow-sm ring-1 ring-slate-200'
-                : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
+                ? 'bg-white font-bold text-[var(--bn-text)] shadow-sm ring-1 ring-black/[0.05]'
+                : 'text-[var(--bn-text-secondary)] hover:bg-white/60 hover:text-[var(--bn-text)]'
             }`}
           >
-            {mode === m && <span className="text-[11px] leading-none">✓</span>}
-            {mode === m ? `当前：${getModeLabel(m)}` : getModeLabel(m)}
+            {getModeLabel(m)}
           </button>
         ))}
       </div>
@@ -172,7 +172,7 @@ export function ActionBar({
         <span className="font-semibold text-slate-600">笔记模板</span>
         <span className="font-medium text-slate-400">当前：{getTemplateLabel(template)}</span>
       </div>
-      <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+      <div className="grid grid-cols-4 gap-1 rounded-[10px] bg-black/[0.05] p-1 ring-1 ring-black/[0.04]">
         {(['study', 'tutorial', 'ideas', 'timeline'] as SummaryTemplate[]).map((item) => (
           <button
             key={item}
@@ -181,8 +181,8 @@ export function ActionBar({
             onClick={() => onTemplateChange(item)}
             className={`min-h-8 rounded-md px-1.5 py-1 text-[11px] transition ${
               template === item
-                ? 'bg-white font-bold text-emerald-700 shadow-sm ring-1 ring-slate-200'
-                : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
+                ? 'bg-white font-bold text-[var(--bn-text)] shadow-sm ring-1 ring-black/[0.05]'
+                : 'text-[var(--bn-text-secondary)] hover:bg-white/60 hover:text-[var(--bn-text)]'
             }`}
           >
             {getTemplateLabel(item)}
@@ -212,7 +212,7 @@ function BatchButton({
       disabled={disabled}
       onClick={onBatchGenerate}
       title="逐个分 P 提取字幕并调用 AI 总结，会消耗更多 token"
-      className={`${compact ? 'shrink-0' : 'shrink-0 self-stretch'} rounded-md bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50`}
+      className={`${compact ? 'shrink-0' : 'shrink-0 self-stretch'} rounded-[8px] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03] disabled:opacity-50`}
     >
       批量
     </button>
@@ -234,7 +234,7 @@ function PartSelector({
   if (pages.length <= 1) return null;
 
   return (
-    <div className={compact ? 'flex min-w-0 flex-1 items-center gap-2' : 'min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 p-2'}>
+    <div className={compact ? 'flex min-w-0 flex-1 items-center gap-2' : 'min-w-0 flex-1 rounded-[8px] border border-[var(--bn-separator-soft)] bg-white/70 p-2'}>
       <div className="shrink-0 text-[11px] font-medium text-slate-500">分 P</div>
       <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
         {pages.map((page) => {
@@ -248,8 +248,8 @@ function PartSelector({
               title={page.part || `P${page.page}`}
               className={`shrink-0 rounded-md px-2 py-1 text-[11px] transition ${
                 active
-                  ? 'bg-blue-600 font-semibold text-white'
-                  : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50'
+                  ? 'bg-[var(--bn-accent)] font-semibold text-white'
+                  : 'bg-white text-[var(--bn-text-secondary)] ring-1 ring-black/[0.07] hover:bg-black/[0.03] hover:text-[var(--bn-text)] disabled:opacity-50'
               }`}
             >
               P{page.page}
@@ -263,6 +263,7 @@ function PartSelector({
 }
 
 export function ContentArea({
+  activeView,
   state,
   obsidian,
   telegram,
@@ -278,7 +279,12 @@ export function ContentArea({
   onRecaptureKeyFrame,
   onDeleteKeyFrame,
   frameStatus,
+  onExtract,
+  onBatchGenerate,
+  onSelectPage,
+  onOpenSummary,
 }: {
+  activeView: AppView;
   state: AppState;
   obsidian: ObsidianConfig;
   telegram: TelegramConfig;
@@ -294,11 +300,40 @@ export function ContentArea({
   onRecaptureKeyFrame: (index: number, seconds: number) => void;
   onDeleteKeyFrame: (index: number) => void;
   frameStatus: 'idle' | 'capturing';
+  onExtract: () => void;
+  onBatchGenerate: () => void;
+  onSelectPage: (page: number) => void;
+  onOpenSummary: (headingId?: string) => void;
 }) {
   const outline = useMemo(
     () => (state.result != null ? extractMarkdownOutline(state.result) : []),
     [state.result]
   );
+
+  if (activeView === 'subtitles') {
+    return (
+      <SubtitlesPage
+        state={state}
+        onExtract={onExtract}
+        onBatchGenerate={onBatchGenerate}
+        onSelectPage={onSelectPage}
+      />
+    );
+  }
+
+  if (activeView === 'outline') {
+    return (
+      <OutlinePage
+        outline={outline}
+        keyFrames={keyFrames}
+        result={state.result}
+        frameStatus={frameStatus}
+        onOpenSummary={onOpenSummary}
+        onRecaptureKeyFrame={onRecaptureKeyFrame}
+        onDeleteKeyFrame={onDeleteKeyFrame}
+      />
+    );
+  }
 
   if (state.status === 'loading_subtitle') {
     return (
@@ -380,22 +415,15 @@ export function ContentArea({
 
   if (state.subtitles) {
     return (
-      <div className="flex-1 overflow-y-auto bg-slate-50 px-3 py-3">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">字幕预览</h3>
-        <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-3">
-          {state.subtitles.slice(0, 50).map((s, i) => (
-            <div key={i} className="flex gap-2 text-xs">
-              <span className="shrink-0 font-mono text-slate-400">
-                {formatTime(s.from)}
-              </span>
-              <span className="leading-relaxed text-slate-700">{s.content}</span>
-            </div>
-          ))}
-          {state.subtitles.length > 50 && (
-            <p className="pt-1 text-xs text-slate-400">
-              ... 还有 {state.subtitles.length - 50} 条
-            </p>
-          )}
+      <div className="flex flex-1 items-center justify-center bg-[var(--bn-bg)] px-5">
+        <div className="bn-panel w-full max-w-sm p-4 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-[10px] bg-white text-sm font-black text-[var(--bn-accent)] shadow-sm ring-1 ring-black/[0.06]">
+            AI
+          </div>
+          <p className="text-sm font-semibold text-[var(--bn-text)]">字幕已准备好</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--bn-text-secondary)]">
+            切到「总结」页生成笔记，或回到「字幕」页查看全文。
+          </p>
         </div>
       </div>
     );
@@ -410,6 +438,171 @@ export function ContentArea({
         <p className="text-sm font-medium text-slate-500">打开 B 站视频页面</p>
         <p className="mt-1 text-xs">点击「一键生成」开始</p>
       </div>
+    </div>
+  );
+}
+
+function SubtitlesPage({
+  state,
+  onExtract,
+  onBatchGenerate,
+  onSelectPage,
+}: {
+  state: AppState;
+  onExtract: () => void;
+  onBatchGenerate: () => void;
+  onSelectPage: (page: number) => void;
+}) {
+  const isLoading = state.status === 'loading_subtitle' || state.status === 'summarizing';
+  const subtitles = state.subtitles || [];
+  const subtitleText = state.subtitleText || '';
+  const copySubtitles = async () => {
+    if (!subtitleText.trim()) return;
+    await navigator.clipboard.writeText(subtitleText).catch(() => undefined);
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[var(--bn-bg)]">
+      <div className="shrink-0 border-b border-[var(--bn-separator-soft)] bg-[var(--bn-chrome)] px-3 py-3 backdrop-blur-xl">
+        <div className="bn-panel p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-[var(--bn-text-tertiary)]">当前视频</div>
+              <div className="mt-0.5 line-clamp-2 text-sm font-bold leading-snug text-[var(--bn-text)]">
+                {state.videoInfo?.title || '打开 B 站视频后提取字幕'}
+              </div>
+            </div>
+            <span className="shrink-0 rounded-full bg-black/[0.05] px-2 py-1 text-[11px] font-semibold text-[var(--bn-text-secondary)]">
+              {subtitles.length ? `${subtitles.length} 条` : '未提取'}
+            </span>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={onExtract}
+              disabled={isLoading}
+              className="bn-button-primary flex-1 disabled:opacity-50"
+            >
+              {state.status === 'loading_subtitle' ? '正在提取...' : subtitles.length ? '重新提取字幕' : '提取字幕'}
+            </button>
+            <button
+              type="button"
+              onClick={copySubtitles}
+              disabled={!subtitleText.trim()}
+              className="bn-button-secondary px-3 disabled:opacity-45"
+            >
+              复制
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <PartSelector videoInfo={state.videoInfo} disabled={isLoading} onSelectPage={onSelectPage} compact />
+            <BatchButton videoInfo={state.videoInfo} disabled={isLoading} onBatchGenerate={onBatchGenerate} compact />
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        {state.status === 'loading_subtitle' ? (
+          <div className="bn-panel p-4 text-center">
+            <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-blue-200 border-t-[var(--bn-accent)]" />
+            <p className="text-sm font-semibold text-[var(--bn-text)]">正在提取字幕</p>
+            <p className="mt-1 text-xs text-[var(--bn-text-secondary)]">没有 CC 字幕时会尝试备用转写流程。</p>
+          </div>
+        ) : subtitles.length ? (
+          <div className="bn-panel divide-y divide-[var(--bn-separator-soft)] overflow-hidden">
+            {subtitles.map((s, i) => (
+              <button
+                key={`${s.from}:${i}`}
+                type="button"
+                onClick={() => sendRuntimeMessage({ type: 'SEEK_TO_TIME', seconds: s.from })}
+                className="flex w-full gap-3 px-3 py-2.5 text-left transition hover:bg-black/[0.03]"
+              >
+                <span className="w-12 shrink-0 font-mono text-[11px] font-semibold text-[var(--bn-accent)]">
+                  {formatTime(s.from)}
+                </span>
+                <span className="text-[13px] leading-6 text-[var(--bn-text)]">{s.content}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="bn-panel p-5 text-center">
+            <p className="text-sm font-semibold text-[var(--bn-text)]">这里专门看字幕</p>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--bn-text-secondary)]">
+              提取后会显示完整时间轴，点击任意字幕可跳转到对应时间。
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OutlinePage({
+  outline,
+  keyFrames,
+  result,
+  frameStatus,
+  onOpenSummary,
+  onRecaptureKeyFrame,
+  onDeleteKeyFrame,
+}: {
+  outline: ReturnType<typeof extractMarkdownOutline>;
+  keyFrames: KeyFrame[];
+  result: string | null;
+  frameStatus: 'idle' | 'capturing';
+  onOpenSummary: (headingId?: string) => void;
+  onRecaptureKeyFrame: (index: number, seconds: number) => void;
+  onDeleteKeyFrame: (index: number) => void;
+}) {
+  if (!result) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-[var(--bn-bg)] px-6">
+        <div className="bn-panel p-5 text-center">
+          <p className="text-sm font-semibold text-[var(--bn-text)]">先生成总结</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--bn-text-secondary)]">
+            大纲会自动整理章节、时间戳和关键画面。
+          </p>
+          <button type="button" onClick={() => onOpenSummary()} className="bn-button-primary mt-4 w-full">
+            去生成总结
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--bn-bg)] px-3 py-3">
+      <section className="bn-panel overflow-hidden">
+        <div className="border-b border-[var(--bn-separator-soft)] px-3 py-3">
+          <h2 className="text-sm font-bold text-[var(--bn-text)]">章节大纲</h2>
+          <p className="mt-0.5 text-xs text-[var(--bn-text-secondary)]">点击章节会切回总结并定位到对应位置。</p>
+        </div>
+        <div className="divide-y divide-[var(--bn-separator-soft)]">
+          {outline.length ? outline.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onOpenSummary(item.id)}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-black/[0.03]"
+            >
+              <span className="w-6 shrink-0 rounded-full bg-black/[0.05] px-1.5 py-0.5 text-center text-[10px] font-bold text-[var(--bn-text-secondary)]">
+                H{item.level}
+              </span>
+              <span className={`${item.level >= 3 ? 'pl-3 text-[12px]' : 'text-[13px] font-semibold'} min-w-0 flex-1 truncate text-[var(--bn-text)]`}>
+                {item.title}
+              </span>
+            </button>
+          )) : (
+            <div className="px-3 py-4 text-xs text-[var(--bn-text-secondary)]">这篇总结暂时没有可识别标题。</div>
+          )}
+        </div>
+      </section>
+      <KeyFrameStrip
+        frames={keyFrames}
+        frameStatus={frameStatus}
+        onRecapture={onRecaptureKeyFrame}
+        onDelete={onDeleteKeyFrame}
+      />
     </div>
   );
 }
@@ -683,7 +876,7 @@ function ResultActions({
   };
 
   return (
-    <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2 shadow-sm">
+    <div className="shrink-0 border-b border-[var(--bn-separator-soft)] bg-[var(--bn-chrome)] px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl">
       <div className="flex min-w-0 items-center gap-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-bold text-slate-900">{fileName}</div>
@@ -702,35 +895,35 @@ function ResultActions({
         <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={copyMarkdown}
-            className="rounded-md bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-200"
+            className="rounded-[8px] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]"
           >
             复制
           </button>
           <button
             onClick={onCaptureFrame}
             disabled={frameStatus === 'capturing'}
-            className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100 disabled:opacity-60"
+            className="rounded-[8px] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03] disabled:opacity-60"
           >
             {frameStatus === 'capturing' ? '抓取中' : '截图'}
           </button>
           <button
             onClick={onAutoCaptureFrames}
             disabled={frameStatus === 'capturing'}
-            className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+            className="rounded-[8px] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03] disabled:opacity-60"
           >
             自动
           </button>
           <button
             onClick={saveToObsidian}
             disabled={frameStatus === 'capturing'}
-            className="rounded-md bg-blue-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-[8px] bg-[var(--bn-accent)] px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--bn-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {frameStatus === 'capturing' ? '等截图' : 'Obsidian'}
           </button>
         </div>
       </div>
-      <details className="group mt-2 rounded-lg border border-slate-200 bg-slate-50/80 px-2 py-1.5">
-        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-slate-600 [&::-webkit-details-marker]:hidden">
+      <details className="group mt-2 rounded-[10px] border border-[var(--bn-separator-soft)] bg-white/70 px-2 py-1.5">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-[var(--bn-text-secondary)] [&::-webkit-details-marker]:hidden">
           详情 / 导出与发布
           <span className="text-[10px] text-slate-400 group-open:hidden">展开</span>
           <span className="hidden text-[10px] text-slate-400 group-open:inline">收起</span>
@@ -742,25 +935,25 @@ function ResultActions({
           {summaryChunks && summaryChunks > 1 && <span>分 {summaryChunks} 段处理</span>}
         </div>
         <div className="mt-2 grid grid-cols-3 gap-1.5">
-          <button onClick={downloadMarkdown} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={downloadMarkdown} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             MD
           </button>
-          <button onClick={downloadPackage} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={downloadPackage} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             资料包
           </button>
-          <button onClick={downloadHtml} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={downloadHtml} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             HTML
           </button>
-          <button onClick={shareMarkdown} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={shareMarkdown} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             分享
           </button>
-          <button onClick={publishTelegraph} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={publishTelegraph} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             Telegraph
           </button>
-          <button onClick={publishTelegram} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={publishTelegram} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             TG
           </button>
-          <button onClick={publishWebhook} className="rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">
+          <button onClick={publishWebhook} className="rounded-[8px] bg-white px-2 py-1.5 text-xs font-semibold text-[var(--bn-text)] ring-1 ring-black/[0.07] transition hover:bg-black/[0.03]">
             Webhook
           </button>
         </div>

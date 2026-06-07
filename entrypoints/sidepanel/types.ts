@@ -2,7 +2,7 @@ import type { SubtitleEntry, VideoInfo } from '@/src/lib/subtitle';
 import type { SummaryMode, SummaryTemplate, TokenUsage } from '@/src/lib/summarizer';
 
 export type Status = 'idle' | 'loading_subtitle' | 'ready' | 'summarizing' | 'done' | 'error';
-export type AppView = 'note' | 'settings' | 'activity';
+export type AppView = 'subtitles' | 'summary' | 'outline' | 'settings';
 export type ConfigSection = 'ai' | 'transcription' | 'preferences' | 'export' | 'publish' | 'pricing';
 
 export interface AppState {
