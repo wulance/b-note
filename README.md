@@ -200,6 +200,133 @@ Model: qwen2.5:7b
 
 也可以先点击“提取字幕”检查字幕预览，再点击“AI 总结”分步生成。
 
+## Obsidian 联动教程
+
+b-note 支持两种 Obsidian 写入方式：
+
+- `Obsidian URI`：最简单，适合快速把 Markdown 带入 Obsidian 新建笔记。
+- `Local REST API`：更稳定，适合长笔记、关键画面附件和自动写入指定文件夹。
+
+### 方式一：Obsidian URI
+
+这种方式不需要安装额外 Obsidian 插件。
+
+1. 在 b-note 侧边栏打开“设置”。
+2. 找到“导出”里的 Obsidian 配置。
+3. 将“Obsidian 同步方式”设为 `URI`。
+4. 填写 `Obsidian Vault`：
+   - 如果留空，会使用 Obsidian 当前默认库。
+   - 如果填写，必须和你的 Obsidian vault 名称一致。
+5. 填写 `Obsidian 文件夹`，默认是：
+
+```text
+B站视频笔记
+```
+
+6. 生成视频笔记后，点击顶部工具栏的 `Obsidian` 按钮。
+7. 浏览器会唤起 Obsidian，并新建一篇带有 Markdown 内容的笔记。
+
+URI 方式适合短笔记和纯文本笔记。浏览器 URL 长度有限，超长笔记或包含大量图片时，建议使用 Local REST API。
+
+### 方式二：Obsidian Local REST API
+
+这种方式推荐给日常使用 Obsidian 的用户。它可以把长笔记稳定写入当前 vault，并把关键画面作为附件保存到同一知识库。
+
+1. 在 Obsidian 中安装并启用社区插件 `Local REST API`。
+2. 在该插件设置里生成或复制 API Key。
+3. 确认 Local REST API 服务地址。常见地址类似：
+
+```text
+http://127.0.0.1:27123
+```
+
+4. 在 b-note 侧边栏打开“设置”。
+5. 将“Obsidian 同步方式”设为 `Local REST API`。
+6. 填写：
+
+```text
+REST API 地址: http://127.0.0.1:27123
+REST API Key: Obsidian 插件里生成的 Key
+REST 根目录: b-note
+Obsidian 文件夹: B站视频笔记
+```
+
+`REST 根目录`不是切换 vault，而是在当前打开的 Obsidian 库内作为文件夹前缀。比如上面的配置会写入：
+
+```text
+b-note/B站视频笔记/视频标题.md
+```
+
+关键画面会写入同级附件目录：
+
+```text
+b-note/B站视频笔记/_assets/视频标题/frame-01.png
+```
+
+7. 如需覆盖同名笔记，开启“覆盖同名笔记”；否则会按 REST 插件的创建逻辑处理同名文件。
+8. 生成视频笔记并等待关键画面抓取完成。
+9. 点击顶部工具栏的 `Obsidian` 按钮。
+10. 成功后，b-note 会提示已写入的笔记路径和图片数量。
+
+### 推荐 Obsidian 配置
+
+常用标签可以填：
+
+```text
+B站视频笔记, AI总结, 视频学习
+```
+
+额外 frontmatter 可以填：
+
+```yaml
+type: video-note
+source: bilibili
+status: inbox
+```
+
+字段映射可以把默认字段改成你知识库习惯的名字，例如：
+
+```text
+url: source_url
+model: ai_model
+keyframes: -
+```
+
+其中 `keyframes: -` 表示隐藏默认的关键画面元数据字段，但正文里的图片仍会保留。
+
+Obsidian 模板支持这些变量：
+
+```text
+{{title}}        视频标题
+{{content}}      完整 Markdown 笔记
+{{url}}          视频链接
+{{generatedAt}}  生成时间
+{{mode}}         总结模式
+{{template}}     笔记模板
+{{model}}        AI 服务商和模型
+```
+
+一个简单模板示例：
+
+```markdown
+# {{title}}
+
+> 来源：{{url}}
+> 生成：{{generatedAt}}
+> 模型：{{model}}
+
+{{content}}
+```
+
+### 常见问题
+
+- 点击 `Obsidian` 没反应：确认浏览器允许打开外部应用，并确认 Obsidian 已安装。
+- URI 方式没有进入指定库：检查 `Obsidian Vault` 是否和 vault 名称完全一致。
+- REST 写入失败：确认 Obsidian 正在运行、Local REST API 插件已启用、API 地址和 Key 正确。
+- REST 提示 401 或 403：API Key 错误或权限不足，重新复制插件里的 Key。
+- REST 提示找不到路径：检查 `REST 根目录` 和 `Obsidian 文件夹` 是否含有多余斜杠或非法字符。
+- 图片没有写入：等侧边栏不再显示“关键画面正在抓取”后再点 `Obsidian`。
+
 ## 脚本
 
 ```bash
